@@ -82,6 +82,15 @@ describe("workflow trust boundaries", () => {
     expect(ci).toContain('DOCKER_BUILD_RECORD_UPLOAD: "false"');
   });
 
+  it("archives the loaded image without requiring a Docker tar exporter", () => {
+    const ci = readFileSync(new URL("ci.yaml", directory), "utf8");
+    expect(ci).toContain("driver: docker");
+    expect(ci).toContain(
+      'docker image save --output "$RUNNER_TEMP/image.tar" screensvr:release',
+    );
+    expect(ci).not.toContain("outputs: type=docker");
+  });
+
   it("does not check out or rebuild application code in the publisher", () => {
     const release = readFileSync(new URL("release.yaml", directory), "utf8");
     const publisher = release.split(/^ {2}publish:\s*$/m)[1];

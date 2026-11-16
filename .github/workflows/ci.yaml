@@ -93,7 +93,10 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
           provenance: false
-          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+      - name: Archive the built image for scanning and release handoff
+        # The docker driver loads builds automatically but cannot export a tar
+        # directly on runners without the containerd image store.
+        run: docker image save --output "$RUNNER_TEMP/image.tar" screensvr:release
       - name: Scan fixable high and critical vulnerabilities
         run: |
           trivy image --input "$RUNNER_TEMP/image.tar" \
