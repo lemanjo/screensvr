@@ -1,110 +1,172 @@
 # screensvr
 
-**Beautiful screens for idle devices.**
+**A screensaver for your wall-mounted smart home tablet.**
 
-screensvr is an open-source, self-hosted platform that transforms idle screens into beautiful, customizable ambient displays.
+screensvr is a self-hosted web app that gives your home automation tablet
+something beautiful to show when it is not in use. Instead of leaving your
+dashboard on screen all day, show a simple clock, soft colors, and gentle
+animation.
 
-Inspired by how smartwatches use downloadable watch faces, screensvr brings the same experience to wall-mounted tablets, smart-home displays, monitors, and other browser-enabled devices.
+It is designed for **[Fully Kiosk Browser](https://www.fully-kiosk.com/)**, which
+can open a web page as a screensaver. Keep Home Assistant or another dashboard as
+your normal page, and use screensvr when the tablet is idle. Fully Kiosk handles
+when the screensaver starts and when to return to your dashboard.
 
-Users can browse, install, and switch between different **screen faces**, each offering a unique visual experience. A face might feature an elegant analog clock over an animated gradient, a minimalist digital clock, generative artwork, or a dynamic display that responds to weather and smart-home data.
+Run screensvr on a server in your home network, then manage all your displays
+from one web interface. Each display has its own link and a choice of customizable
+designs, called **screen faces**. Preview a face, adjust its settings, and save:
+connected displays update automatically. Your settings and installed faces stay
+on your server, with no cloud account needed.
 
-Each face is independently developed and customizable, allowing users to personalize colors, animations, clock styles, layouts, and displayed information.
+![The screensvr management dashboard showing three connected displays with different clock faces](docs/images/displays.png)
 
-## First release: v0.1
+## Deployment
 
-The first release includes a management UI, multiple independent displays, four
-bundled clock faces, live previews and settings updates, and **local face ZIP
-installation**. Configuration and installed packages stay on your server.
+Choose one of the following options. All three run the app on port **3000**.
 
-The preinstalled collection includes **Slow Hours**, **Soft Orbit**,
-**Color Drift**, and **Color Drift Night**. Both Color Drift faces pair a
-numberless analog clock and four rounded hour markers with a gently animated
-gradient. Night uses midnight indigo, deep plum, and teal with a moonlit clock.
-Their colors and animation are configurable, and both respect reduced-motion
-preferences.
+### Use the prebuilt container (recommended)
 
-### Run with Docker
+Requires Docker with Docker Compose. Create a directory for screensvr and save
+the following as `compose.yaml` inside it:
+
+```yaml
+services:
+  screensvr:
+    image: ghcr.io/lemanjo/screensvr:v0.1.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - screensvr-data:/data
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  screensvr-data:
+```
+
+From that directory, start the app:
 
 ```sh
+docker compose up -d
+```
+
+Images are published to GitHub Container Registry (GHCR). The example pins
+**v0.1.0**; see [releases](https://github.com/lemanjo/screensvr/releases) for
+available versions. Published images currently support **Linux amd64**. For ARM
+servers, build the container from source using the next option.
+
+### Build the container locally
+
+Requires Git and Docker with Docker Compose. Clone the source and build it on
+your server:
+
+```sh
+git clone https://github.com/lemanjo/screensvr.git
+cd screensvr
 docker compose up --build -d
 ```
 
-Open **http://localhost:3000**, create an administrator password, and add a display.
-Open its permanent display address in the tablet or kiosk browser, for example
-`http://screensvr.local:3000/display/olohuone` for a display named **Olohuone**.
-Use **Display link** to retrieve that same address at any time. It does not
-change when you rename the display, and no pairing or display cookie is needed.
-Duplicate names get numbered suffixes such as `olohuone-2`.
+The repository includes a `compose.yaml`, so no extra configuration is needed.
 
-Display addresses are readable by anyone who can reach the server; keep the
-server on a trusted network or protect it with your reverse proxy. Management
-still requires the administrator password. Complete first-run setup on a trusted
-network: the first person to finish setup claims the server.
+### Run locally with Node.js
 
-The named `screensvr-data` volume persists settings, authentication, and installed
-faces. See [deployment and backups](docs/deployment.md) before exposing the server
-or upgrading it.
-
-Published releases provide `ghcr.io/lemanjo/screensvr:vVERSION` images for
-Linux amd64, with build provenance and an SBOM. See the
-[published-image instructions](docs/deployment.md#published-release-images)
-and [release security](docs/releasing.md). The first image becomes available
-after the first successful release workflow.
-
-### Run locally
-
-Requires Node.js 24 LTS.
+Requires Git and **Node.js 24 LTS**. No Docker is needed.
 
 ```sh
+git clone https://github.com/lemanjo/screensvr.git
+cd screensvr
 npm ci
 npm run build
 npm start
 ```
 
-For development, run `npm run dev` and open **http://localhost:5173**. Vite proxies
-the API and face assets to Fastify on port 3000. Do not use the development server
-as a production deployment.
+**Keep your data:** Both container options store settings, authentication, and
+installed faces in the `screensvr-data` volume. Node.js uses the `data/` directory
+by default. Keep this storage when upgrading. See
+[deployment and backups](docs/deployment.md) for environment variables, HTTPS,
+backups, and container image verification.
 
-### Install your own face
+## Set up your tablet
 
-In **Face library**, choose **Install ZIP**. Only install packages from sources
-you trust: faces contain executable JavaScript, and the v0.1 sandbox is defense
-in depth, not a promise that hostile code is safe.
+1. Open `http://YOUR_SERVER_IP:3000` in a browser. If you are on the server itself,
+   you can use **http://localhost:3000**.
+2. Create an administrator password with at least 12 characters.
+3. Choose **Add display**, give it a name such as **Living room**, and pick a face.
+4. Copy its **Display URL**, for example
+   `http://YOUR_SERVER_IP:3000/display/living-room`.
 
-See the [face developer guide](docs/faces.md) and the
-[framework-free example](examples/paper/). No server rebuild is required to
-install a face.
+Use your server's network IP address or hostname in the tablet's link, not
+`localhost`. You can retrieve the link later with **Display link**. It stays the
+same even if you rename the display, and the tablet does not need an
+administrator login.
 
-## Product direction
+### Use it as a Fully Kiosk screensaver
 
-The following describes the broader vision. Scheduling, Home Assistant,
-community discovery, and automatic updates are **not included in v0.1**.
+On your tablet, keep your usual dashboard as Fully Kiosk's **Start URL**. Then:
 
-- **Downloadable screen faces:** Discover, install, and switch between beautiful community-created designs, just like smartwatch watch faces.
-- **Fully customizable:** Each face provides its own configuration options for colors, styles, animations, and information.
-- **Central management:** A modern web interface for managing faces, configuring devices, and previewing changes.
-- **Multi-device support:** Manage multiple displays, each with its own active face and settings.
-- **Smart scheduling:** Automatically change faces based on time, sunrise, sunset, or custom conditions.
-- **Home Assistant integration:** Optionally display live smart-home information such as temperature, weather, or energy consumption.
-- **Open plugin ecosystem:** Developers can build and distribute their own faces using modern web technologies.
-- **Self-hosted and local-first:** Simple Docker deployment with no cloud dependency.
+1. Open Fully Kiosk's **Settings → Screensaver**.
+2. Set **Screensaver Wallpaper URL** to the display link you copied.
+3. Set **Screensaver Timer** to your preferred idle time, for example 60 seconds.
+4. Leave **Screensaver Playlist** empty if you only want the screensvr page.
 
-## How It Works
+The screensaver feature requires **Fully PLUS**. See the
+[Fully Kiosk screensaver settings](https://www.fully-kiosk.com/docs/en/configuration/screensaver)
+for brightness, motion detection, and other options.
 
-screensvr runs as a lightweight web application on the user's own server.
+You can also open a display link in any modern browser and use fullscreen mode
+on a tablet or monitor. Automatic screensaver activation is handled by your
+kiosk app, not by screensvr.
 
-A central management interface allows users to install and configure screen faces. Each display opens a dedicated screensvr URL in its browser, which renders the selected face.
+> **Keep it on a trusted network.** Anyone who can reach the server can view its
+> display links; management requires the administrator password. Complete
+> first-run setup on your trusted network, since the first person to finish setup
+> claims the server. See the [deployment guide](docs/deployment.md#reverse-proxies)
+> before exposing it outside your home.
 
-Changes made through the management interface can be reflected on connected displays automatically.
+## Included screen faces
 
-The platform is designed to work especially well with **Fully Kiosk Browser and Home Assistant**, while remaining compatible with ordinary web browsers.
+Four clock faces are ready to use. These screenshots show their default settings.
+Each face has its own options for colors, clock style, or animation.
+
+| Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| ![Slow Hours: a digital clock on a dark green background](docs/images/slow-hours.png)         | ![Soft Orbit: an analog clock on a warm, paper-colored background](docs/images/soft-orbit.png)                              |
+| A quiet digital clock with a short reminder.                                                  | A simple analog clock with a warm, paper-like finish.                                                                       |
+| **Color Drift**                                                                               | **Color Drift Night**                                                                                                       |
+| ![Color Drift: a numberless analog clock over a pastel gradient](docs/images/color-drift.png) | ![Color Drift Night: a moonlit analog clock over a dark indigo, plum, and teal gradient](docs/images/color-drift-night.png) |
+| Soft colors and a slowly moving gradient.                                                     | A darker take on Color Drift for a quieter screen.                                                                          |
+
+## Add more faces
+
+Open **Face library** to browse your collection. To add a face, choose **Install
+ZIP** and select a face package. No server rebuild is needed.
+
+![The face library showing the four bundled clock faces and the Install ZIP button](docs/images/face-library.png)
+
+Only install packages from sources you trust. Faces run JavaScript; the sandbox
+adds protection but does not make untrusted code safe.
+
+Want to build your own? Start with the [face developer guide](docs/faces.md) and
+the [framework-free example](examples/paper/).
 
 ## Development
 
 Open the repository using **Dev Containers: Reopen in Container** in VS Code for
-the Node.js, SQLite, linting, unit-testing, and cross-browser testing toolchain.
-See [the development guide](docs/development.md) for requirements, rootless
-Docker/Podman setup, and environment checks.
+the development toolchain, or use Node.js 24 LTS locally:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open **http://localhost:5173**. The development server forwards API and face
+requests to the backend on port 3000. Do not use it for production.
+
+To run checks:
 
 ```sh
 npm run typecheck
@@ -115,12 +177,5 @@ npm run test:e2e
 ```
 
 Browser tests use Chromium, Firefox, and WebKit. Actual Fully Kiosk/Android
-hardware still needs device testing.
-
-## Vision
-
-screensvr aims to do for idle screens what watch faces did for smartwatches: turn a functional display into something personal, beautiful, and expressive.
-
-Instead of building another smart-home dashboard, screensvr focuses on the visual experience, combining elegant design, subtle animation, and useful information.
-
-**One platform. Endless faces. Your screen, your style.**
+hardware still needs device testing. See the [development guide](docs/development.md)
+for more details.
