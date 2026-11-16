@@ -6,7 +6,7 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
   browser,
 }, testInfo) => {
   const suffix = testInfo.project.name;
-  const displayName = `Hallway ${suffix}`;
+  const displayName = `Olohuone ${suffix}`;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -19,11 +19,19 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
   ).toBeVisible();
   await page.getByRole("button", { name: "Add display", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill(displayName);
-  await page.getByLabel("Start with a face").selectOption("builtin-digital");
+  await page.getByRole("combobox", { name: "Start with a face" }).click();
+  await page.getByRole("option", { name: "Slow Hours", exact: true }).click();
   await page
     .getByRole("button", { name: "Create display", exact: true })
     .click();
   const link = await page.getByLabel("Display URL").inputValue();
+  expect(new URL(link).pathname).toBe(`/display/olohuone-${suffix}`);
+  expect(new URL(link).hash).toBe("");
+  const devices = (await (await page.request.get("/api/devices")).json()) as {
+    id: string;
+    name: string;
+  }[];
+  const device = devices.find((device) => device.name === displayName)!;
   const displayContext = await browser.newContext();
   const display = await displayContext.newPage();
   display.on("pageerror", (error) => errors.push(error.message));
@@ -36,6 +44,26 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
       401,
     );
     await page.getByRole("button", { name: "Close dialog" }).click();
+    // Retrieving the link is repeatable and never revokes a connected screen.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page
+        .getByRole("button", {
+          name: `Display link for ${displayName}`,
+          exact: true,
+        })
+        .click();
+      await expect(page.getByLabel("Display URL")).toHaveValue(link);
+      await page.getByRole("button", { name: "Close dialog" }).click();
+    }
+    await displayContext.clearCookies();
+    await display.reload();
+    await expect(digital.locator("#caption")).toHaveText("Be here, now.");
+    // Old UUID links migrate to the permanent address, discarding old secrets.
+    await display.goto(
+      new URL(`/display/${device.id}#old-pairing-secret`, link).href,
+    );
+    await expect(display).toHaveURL(link);
+    await expect(digital.locator("#caption")).toHaveText("Be here, now.");
     await page
       .getByRole("button", { name: `Configure ${displayName}`, exact: true })
       .click();
@@ -65,13 +93,11 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
       exact: true,
     });
     if (!(await existing.count())) {
-      await page
-        .locator('input[type="file"]')
-        .setInputFiles({
-          name: "test-face.zip",
-          mimeType: "application/zip",
-          buffer: faceZip(),
-        });
+      await page.locator('input[type="file"]').setInputFiles({
+        name: "test-face.zip",
+        mimeType: "application/zip",
+        buffer: faceZip(),
+      });
       await page.getByLabel("I trust the source of this package.").check();
       await page
         .getByRole("button", { name: "Install face", exact: true })
@@ -82,7 +108,8 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
     await page
       .getByRole("button", { name: `Configure ${displayName}`, exact: true })
       .click();
-    await page.getByLabel("Screen face").selectOption("test-face");
+    await page.getByRole("combobox", { name: "Screen face" }).click();
+    await page.getByRole("option", { name: "Test Face", exact: true }).click();
     await page
       .getByLabel("Caption", { exact: true })
       .fill("A face from a ZIP.");
@@ -120,6 +147,41 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
       path: testInfo.outputPath("management.png"),
       fullPage: true,
     });
+    const renamed = `Renamed ${suffix}`;
+    await page
+      .getByRole("button", { name: `Configure ${displayName}`, exact: true })
+      .click();
+    await page.getByLabel("Display name", { exact: true }).fill(renamed);
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await page.reload();
+    await page
+      .getByRole("button", { name: `Display link for ${renamed}`, exact: true })
+      .click();
+    await expect(page.getByLabel("Display URL")).toHaveValue(link);
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await display.reload();
+    await expect(
+      display
+        .frameLocator('iframe[title="Test Face face"]')
+        .locator("#caption"),
+    ).toHaveText("A face from a ZIP.");
+    await expect(display).toHaveURL(link);
+    await expect(display.getByRole("status")).toBeHidden();
+    await page
+      .getByRole("button", { name: `Remove ${renamed}`, exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Yes, remove", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: `Configure ${renamed}`, exact: true }),
+    ).toBeHidden();
+    await expect(display.getByRole("alert")).toHaveText(
+      "This display has been removed from management.",
+    );
+    // Bodyless mutations such as removal and sign-out must not send JSON headers.
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect(page.getByLabel("Administrator password")).toBeVisible();
   } finally {
     await displayContext.close();
   }

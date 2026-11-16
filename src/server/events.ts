@@ -40,15 +40,15 @@ export class Events {
     }
   }
 
-  disconnect(id: string) {
+  disconnect(id: string, removed = true) {
     for (const client of this.clients.get(id) ?? []) {
-      client.write("event: revoked\ndata: {}\n\n");
+      if (removed) client.write("event: removed\ndata: {}\n\n");
       client.end();
     }
     this.clients.delete(id);
   }
 
   close() {
-    for (const id of this.clients.keys()) this.disconnect(id);
+    for (const id of this.clients.keys()) this.disconnect(id, false);
   }
 }

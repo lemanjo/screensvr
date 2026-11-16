@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Color Drift Night</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="gradient" aria-hidden="true"></div>
+    <main>
+      <svg
+        id="clock"
+        viewBox="0 0 400 400"
+        role="img"
+        aria-label="Analog clock"
+      >
+        <g id="marks" aria-hidden="true">
+          <line x1="200" y1="28" x2="200" y2="52" />
+          <line x1="348" y1="200" x2="372" y2="200" />
+          <line x1="200" y1="348" x2="200" y2="372" />
+          <line x1="28" y1="200" x2="52" y2="200" />
+        </g>
+        <g class="hands" aria-hidden="true">
+          <line id="hour" x1="200" y1="200" x2="200" y2="112" />
+          <line id="minute" x1="200" y1="200" x2="200" y2="76" />
+        </g>
+        <circle class="pin" cx="200" cy="200" r="6" aria-hidden="true" />
+      </svg>
+    </main>
+    <script src="/face-sdk.js"></script>
+    <script src="face.js"></script>
+  </body>
+</html>

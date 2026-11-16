@@ -26,7 +26,12 @@ export class Faces {
     readonly directory: string,
     readonly builtinDirectory: string,
   ) {
-    for (const id of ["builtin-digital", "builtin-analog"]) {
+    for (const id of [
+      "builtin-digital",
+      "builtin-analog",
+      "builtin-gradient",
+      "builtin-gradient-dark",
+    ]) {
       const manifest = manifestSchema.parse(
         JSON.parse(
           readFileSync(

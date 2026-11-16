@@ -687,7 +687,8 @@ label {
   font-weight: 500;
 }
 input:not([type="checkbox"]):not([type="color"]),
-select {
+select,
+.select-trigger {
   width: 100%;
   min-height: 42px;
   padding: 10px 12px;
@@ -695,6 +696,88 @@ select {
   border-radius: 6px;
   color: #3b4b39;
   background: #fff;
+  font-size: 12px;
+}
+.select-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.select-control {
+  position: relative;
+}
+.select-control .select-trigger {
+  padding-right: 38px;
+  text-align: left;
+}
+button.select-trigger {
+  display: flex;
+  align-items: center;
+}
+.select-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-trigger:hover {
+  border-color: #b5c4a8;
+}
+.select-control[data-open="true"] .select-trigger {
+  border-color: #718e54;
+  box-shadow: 0 0 0 3px #718e5414;
+}
+.select-chevron {
+  position: absolute;
+  right: 12px;
+  top: calc(50% - 8px);
+  color: #7c8e6e;
+  pointer-events: none;
+}
+.select-control[data-open="true"] .select-chevron {
+  transform: rotate(180deg);
+}
+.select-menu {
+  position: fixed;
+  z-index: 150;
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #dce3d4;
+  border-radius: 8px;
+  background: #fafbf7;
+  box-shadow: 0 8px 28px #23382024;
+  scrollbar-width: thin;
+  scrollbar-color: #c5d1bb #fafbf7;
+}
+.select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  padding: 9px 10px;
+  border-radius: 4px;
+  color: #3b4b39;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.select-option[aria-selected="true"] {
+  color: var(--green);
+  font-weight: 600;
+}
+.select-option[data-active="true"] {
+  background: #e5ecdd;
+  color: #35553c;
+}
+.select-option svg {
+  flex-shrink: 0;
+}
+.select-empty {
+  padding: 12px 10px;
+  color: var(--muted);
   font-size: 12px;
 }
 input::placeholder {
@@ -787,7 +870,7 @@ small {
   color: #8a977c;
   letter-spacing: 0.05em;
 }
-.pairing-symbol {
+.display-link-symbol {
   width: 60px;
   height: 60px;
   background: #e7eddd;
@@ -797,7 +880,7 @@ small {
   place-items: center;
   align-self: center;
 }
-.pairing-symbol svg {
+.display-link-symbol svg {
   width: 30px;
   height: 30px;
 }

@@ -3,7 +3,7 @@ import type { DisplayState } from "../../src/shared/contracts.js";
 import { api, ApiError } from "./api.js";
 import { FaceFrame } from "./FaceFrame.js";
 
-export function Display({ id }: { id: string }) {
+export function Display({ slug }: { slug: string }) {
   const [state, setState] = useState<DisplayState>();
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
@@ -12,11 +12,13 @@ export function Display({ id }: { id: string }) {
     let source: EventSource | undefined;
     let retry: ReturnType<typeof setTimeout>;
     async function refresh() {
-      const next = await api<DisplayState>(`/api/display/${id}/state`);
-      if (!cancelled)
+      const next = await api<DisplayState>(`/api/display/${slug}/state`);
+      if (!cancelled) {
+        history.replaceState(null, "", next.displayUrl);
         setState((current) =>
           !current || next.revision >= current.revision ? next : current,
         );
+      }
     }
     function terminal(message: string) {
       source?.close();
@@ -24,17 +26,12 @@ export function Display({ id }: { id: string }) {
     }
     async function start() {
       try {
-        const token = window.location.hash.slice(1);
-        if (token) {
-          await api(`/api/display/${id}/pair`, {
-            method: "POST",
-            body: JSON.stringify({ token }),
-          });
+        // Old bookmarked links may still contain a pairing fragment.
+        if (window.location.hash)
           history.replaceState(null, "", window.location.pathname);
-        }
         await refresh();
         if (cancelled) return;
-        source = new EventSource(`/api/display/${id}/events`);
+        source = new EventSource(`/api/display/${slug}/events`);
         source.addEventListener("state", (event) => {
           const next = JSON.parse((event as MessageEvent).data) as DisplayState;
           setState((current) =>
@@ -43,16 +40,14 @@ export function Display({ id }: { id: string }) {
           setConnected(true);
           setError("");
         });
-        source.addEventListener("revoked", () =>
-          terminal(
-            "This display link was revoked. Open a new link from management.",
-          ),
+        source.addEventListener("removed", () =>
+          terminal("This display has been removed from management."),
         );
         source.onerror = () => {
           if (cancelled) return;
           setConnected(false);
           void refresh().catch((error) => {
-            if (error instanceof ApiError && error.status === 401)
+            if (error instanceof ApiError && error.status === 404)
               terminal(error.message);
           });
         };
@@ -78,7 +73,7 @@ export function Display({ id }: { id: string }) {
       clearTimeout(retry);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [id]);
+  }, [slug]);
 
   useEffect(() => {
     let lock: WakeLockSentinel | undefined;
@@ -106,7 +101,7 @@ export function Display({ id }: { id: string }) {
     return (
       <main className="display-message">
         <span className="wordmark">screensvr</span>
-        <h1>Let’s reconnect this screen.</h1>
+        <h1>This display is unavailable.</h1>
         <p role="alert">{error}</p>
         <button onClick={() => location.reload()}>Try again</button>
       </main>

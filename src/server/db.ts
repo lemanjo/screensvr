@@ -3,12 +3,12 @@ import type { Face, Settings } from "../shared/contracts.js";
 
 export type DeviceRow = {
   id: string;
+  slug: string;
   name: string;
   face_id: string;
   settings: string;
   timezone: string;
   revision: number;
-  token_hash: string;
   last_seen: number | null;
 };
 
@@ -23,7 +23,7 @@ export class Store {
     const version = (
       this.db.prepare("PRAGMA user_version").get() as { user_version: number }
     ).user_version;
-    if (version > 1)
+    if (version > 2)
       throw new Error("This database requires a newer screensvr version.");
     if (version === 0) {
       this.db.exec(`
@@ -32,14 +32,39 @@ export class Store {
         CREATE TABLE sessions (hash TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires INTEGER NOT NULL);
         CREATE TABLE faces (id TEXT PRIMARY KEY, manifest TEXT NOT NULL, builtin INTEGER NOT NULL);
         CREATE TABLE devices (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL,
+          id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
           face_id TEXT NOT NULL REFERENCES faces(id),
           settings TEXT NOT NULL, timezone TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
-          token_hash TEXT NOT NULL, last_seen INTEGER
+          last_seen INTEGER
         );
-        PRAGMA user_version = 1;
+        PRAGMA user_version = 2;
         COMMIT;
       `);
+    }
+    if (version === 1) {
+      this.db.exec("BEGIN;");
+      try {
+        this.db.exec(
+          "ALTER TABLE devices ADD COLUMN slug TEXT NOT NULL DEFAULT '';",
+        );
+        const rows = this.db
+          .prepare("SELECT id, name FROM devices ORDER BY rowid")
+          .all() as { id: string; name: string }[];
+        for (const row of rows)
+          this.db
+            .prepare("UPDATE devices SET slug = ? WHERE id = ?")
+            .run(this.availableSlug(row.name), row.id);
+        this.db.exec(`
+          CREATE UNIQUE INDEX devices_slug ON devices(slug);
+          ALTER TABLE devices DROP COLUMN token_hash;
+          PRAGMA user_version = 2;
+          COMMIT;
+        `);
+      } catch (error) {
+        this.db.exec("ROLLBACK;");
+        this.db.close();
+        throw error;
+      }
     }
   }
 
@@ -77,6 +102,30 @@ export class Store {
       DeviceRow | undefined;
   }
 
+  display(identifier: string): DeviceRow | undefined {
+    return (
+      (this.db
+        .prepare("SELECT * FROM devices WHERE slug = ?")
+        .get(identifier) as DeviceRow | undefined) ?? this.device(identifier)
+    );
+  }
+
+  availableSlug(name: string): string {
+    const base =
+      name
+        .normalize("NFKD")
+        .replace(/\p{M}/gu, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .slice(0, 80)
+        .replace(/^-+|-+$/g, "") || "display";
+    let slug = base;
+    let suffix = 2;
+    while (this.db.prepare("SELECT 1 FROM devices WHERE slug = ?").get(slug))
+      slug = `${base}-${suffix++}`;
+    return slug;
+  }
+
   devices(): DeviceRow[] {
     return this.db
       .prepare("SELECT * FROM devices ORDER BY name COLLATE NOCASE, id")
@@ -96,6 +145,7 @@ export class Store {
     if (!face) throw new Error("Device face is missing.");
     return {
       id: row.id,
+      displayUrl: `/display/${row.slug}`,
       name: row.name,
       timezone: row.timezone,
       revision: row.revision,

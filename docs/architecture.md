@@ -6,19 +6,19 @@ directory share one persistent data volume. No cloud service is required.
 
 ## Implementation
 
-| Location                  | Responsibility                                                |
-| ------------------------- | ------------------------------------------------------------- |
-| `src/server/app.ts`       | Fastify routes, access control, HTTP security, static hosting |
-| `src/server/db.ts`        | SQLite schema and queries                                     |
-| `src/server/faces.ts`     | Bundled faces and bounded ZIP installation                    |
-| `src/server/auth.ts`      | Password hashing and administrator sessions                   |
-| `src/server/events.ts`    | Display connections, heartbeats, notifications                |
-| `src/shared/contracts.ts` | Versioned manifests and configuration validation              |
-| `web/src/App.tsx`         | Administrator setup, display management, face library         |
-| `web/src/Display.tsx`     | Pairing, reconnects, fullscreen, wake-lock requests           |
-| `web/src/FaceFrame.tsx`   | Shared preview/display renderer and message bridge            |
-| `public/face-sdk.js`      | Framework-independent browser SDK                             |
-| `faces/`                  | Two immutable bundled faces                                   |
+| Location                  | Responsibility                                                  |
+| ------------------------- | --------------------------------------------------------------- |
+| `src/server/app.ts`       | Fastify routes, access control, HTTP security, static hosting   |
+| `src/server/db.ts`        | SQLite schema and queries                                       |
+| `src/server/faces.ts`     | Bundled faces and bounded ZIP installation                      |
+| `src/server/auth.ts`      | Password hashing and administrator sessions                     |
+| `src/server/events.ts`    | Display connections, heartbeats, notifications                  |
+| `src/shared/contracts.ts` | Versioned manifests and configuration validation                |
+| `web/src/App.tsx`         | Administrator setup, display management, face library           |
+| `web/src/Display.tsx`     | Permanent display addresses, reconnects, fullscreen, wake locks |
+| `web/src/FaceFrame.tsx`   | Shared preview/display renderer and message bridge              |
+| `public/face-sdk.js`      | Framework-independent browser SDK                               |
+| `faces/`                  | Four immutable bundled faces                                    |
 
 Vite builds the frontend; TypeScript compiles the server. Management is loaded
 separately from the display client so displays do not download the management UI
@@ -28,8 +28,9 @@ and manifest-validation code.
 
 - **Faces:** one installed version per unique face ID, a validated manifest, and
   a bundled/installed flag.
-- **Devices:** UUID, friendly name, face assignment, validated settings, IANA
-  timezone, configuration revision, pairing-token hash, and last-seen timestamp.
+- **Devices:** internal UUID, unique permanent URL slug, friendly name, face
+  assignment, validated settings, IANA timezone, configuration revision, and
+  last-seen timestamp.
 - **Administrator:** one salted scrypt password hash.
 - **Sessions:** hashed random session tokens, CSRF tokens, and expiry.
 
@@ -40,31 +41,36 @@ transactional schema initialization (`PRAGMA user_version`).
 The data directory contains `screensvr.sqlite` (plus SQLite WAL files) and
 `faces/<id>/<version>/content/`. Bundled assets ship with the application.
 
-## Authentication and pairing
+## Authentication and display addresses
 
 The first-run setup creates the sole administrator. Administrator sessions use
 HttpOnly, SameSite=Strict cookies and expire after seven days. Mutations require
 a session CSRF token, and browser-origin checks reject cross-origin mutations.
-Setup, login, and pairing are rate-limited. HTTPS and secure cookies are
+Setup and login are rate-limited. HTTPS and secure cookies are
 recommended beyond a trusted LAN.
 
-Management generates a link like:
+Management assigns a permanent address based on the display's initial name:
 
 ```text
-http://screensvr.local:3000/display/<uuid>#<secret>
+http://screensvr.local:3000/display/olohuone
 ```
 
-The browser exchanges the fragment secret for an HttpOnly cookie scoped to that
-device's API path, then removes the fragment. Fragments are not sent in HTTP
-requests or referrers. Only a hash of the pairing secret is stored in SQLite.
-The cookie grants read-only device access, not administrator access. Generating
-a new link revokes previous links/cookies and disconnects existing streams.
+The slug is lowercase, with accents simplified and word separators converted to
+hyphens. Names with no usable letters or digits use `display`. Collisions get
+deterministic suffixes (`olohuone-2`, `olohuone-3`). The slug is persisted and is
+not changed by renaming the display, reading its link, or restarting the server.
+Existing databases are migrated transactionally, retaining settings and assigning
+slugs from existing names. Old UUID URLs redirect to the permanent addresses;
+obsolete pairing fragments are discarded by the client.
 
-Friendly display names are labels, not identifiers or credentials.
+Displays and their state/SSE endpoints are read-only and require no login,
+pairing secret, or display cookie. Anyone who can reach the server can view a
+display. Management APIs remain session- and CSRF-protected. Deploy on a trusted
+network or enforce additional network/reverse-proxy access controls.
 
 ## Synchronization and recovery
 
-Each device connects to its own SSE endpoint using the scoped cookie. Every
+Each device connects to its own SSE endpoint using its permanent slug. Every
 connection receives a complete current snapshot; subsequent committed changes
 publish a new snapshot. Intermediate events do not need replaying.
 
@@ -85,7 +91,7 @@ origins. Public face assets allow anonymous CORS for ES modules and fonts from
 the sandbox's opaque origin; API responses do not.
 
 The shell transfers a MessagePort to the iframe. The SDK passes only validated
-settings and non-secret display context. No session token, pairing credential,
+settings and non-secret display context. No session token,
 Home Assistant secret, or internal React API crosses this boundary.
 
 Preview and display use the same renderer and protocol.

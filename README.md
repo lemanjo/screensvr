@@ -12,9 +12,16 @@ Each face is independently developed and customizable, allowing users to persona
 
 ## First release: v0.1
 
-The first release includes a management UI, multiple independent displays, two
+The first release includes a management UI, multiple independent displays, four
 bundled clock faces, live previews and settings updates, and **local face ZIP
 installation**. Configuration and installed packages stay on your server.
+
+The preinstalled collection includes **Slow Hours**, **Soft Orbit**,
+**Color Drift**, and **Color Drift Night**. Both Color Drift faces pair a
+numberless analog clock and four rounded hour markers with a gently animated
+gradient. Night uses midnight indigo, deep plum, and teal with a moonlit clock.
+Their colors and animation are configurable, and both respect reduced-motion
+preferences.
 
 ### Run with Docker
 
@@ -23,8 +30,16 @@ docker compose up --build -d
 ```
 
 Open **http://localhost:3000**, create an administrator password, and add a display.
-Open its private display link in the tablet or kiosk browser. Complete first-run
-setup on a trusted network: the first person to finish setup claims the server.
+Open its permanent display address in the tablet or kiosk browser, for example
+`http://screensvr.local:3000/display/olohuone` for a display named **Olohuone**.
+Use **Display link** to retrieve that same address at any time. It does not
+change when you rename the display, and no pairing or display cookie is needed.
+Duplicate names get numbered suffixes such as `olohuone-2`.
+
+Display addresses are readable by anyone who can reach the server; keep the
+server on a trusted network or protect it with your reverse proxy. Management
+still requires the administrator password. Complete first-run setup on a trusted
+network: the first person to finish setup claims the server.
 
 The named `screensvr-data` volume persists settings, authentication, and installed
 faces. See [deployment and backups](docs/deployment.md) before exposing the server

@@ -7,7 +7,7 @@ docker compose up --build -d
 ```
 
 Visit `http://<server>:3000` and complete administrator setup immediately on a
-trusted network. Add a display and open its private link in Fully Kiosk Browser
+trusted network. Add a display and open its permanent address in Fully Kiosk Browser
 or another modern browser. Kiosk fullscreen and screen-on policies may need
 configuration on the device. Browser wake locks are best-effort and often
 unavailable on plain HTTP.
@@ -56,16 +56,22 @@ Use a dedicated origin, not a subpath such as `/screensvr/`. Do not enable broad
 CORS on the API. Do not share the origin with unrelated applications or grant
 untrusted users filesystem access.
 
-## Pairing and credentials
+## Display addresses and credentials
 
-Administrator cookies expire after seven days. Display pairing cookies last
-one year, unless revoked earlier. Reopen a fresh display link when a cookie
-expires or is lost.
+Administrator cookies expire after seven days. Displays use permanent,
+name-based URLs such as `/display/olohuone`, without secrets, pairing, or cookies.
+Use **Display link** to retrieve the same address again; it stays unchanged after
+renames and restarts. Duplicate names receive numbered suffixes.
 
-The secret is in the URL fragment, not a query parameter. The client removes it
-after pairing. Still treat the whole link as a credential: browser history,
-clipboard managers, screenshots, or anyone you share it with may retain it.
-**New display link** revokes earlier links and connected clients immediately.
+Display content and read-only state/SSE APIs can be viewed by anyone who can
+reach the server. Use a trusted LAN, VPN, or reverse-proxy access controls when
+displayed information should not be public. Administrator APIs still require
+authentication. Deleting a display removes its address and disconnects its
+screens.
+
+Upgrades automatically assign name-based addresses to existing displays without
+losing their settings. Old UUID-based display links redirect to the permanent
+address; old pairing fragments and display cookies are no longer needed.
 
 If you lose the administrator password, stop the server, back up the data, then
 use the SQLite CLI against the backup-verified database:
@@ -78,7 +84,7 @@ COMMIT;
 ```
 
 Restart on a trusted/private network and immediately complete first-run setup
-again. This leaves device settings, packages, and display credentials intact.
+again. This leaves device settings, packages, and permanent addresses intact.
 Never edit the database while an upgrade is running.
 
 ## Backups
@@ -96,7 +102,7 @@ docker compose start screensvr
 ```
 
 Choose a fresh destination for each backup. Backups include password hashes,
-sessions, and pairing-token hashes; restrict access to them.
+sessions, and display settings; restrict access to them.
 
 To restore, stop screensvr, restore the complete directory into its data volume,
 ensure the runtime user can read/write it (normally UID 1000), and start the

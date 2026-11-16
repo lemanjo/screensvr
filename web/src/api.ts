@@ -17,9 +17,9 @@ export async function api<T>(
   const response = await fetch(url, {
     ...options,
     headers: {
-      ...(options.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
+      ...(options.body && !(options.body instanceof FormData)
+        ? { "Content-Type": "application/json" }
+        : {}),
       "X-CSRF-Token": csrf,
       ...options.headers,
     },

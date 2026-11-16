@@ -14,9 +14,10 @@ import {
 } from "../../src/shared/contracts.js";
 import { api, ApiError, errorMessage, setCSRF } from "./api.js";
 import { FaceFrame } from "./FaceFrame.js";
+import { Select } from "./Select.js";
 
 const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const zones = Intl.supportedValuesOf("timeZone");
+const zones = ["UTC", localTimezone, ...Intl.supportedValuesOf("timeZone")];
 type Auth = { configured: boolean; authenticated: boolean; csrf?: string };
 type IconName =
   | "display"
@@ -284,19 +285,12 @@ function SettingField({
     );
   if (setting.type === "select")
     return (
-      <label>
-        {setting.label}
-        <select
-          value={String(value)}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {setting.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        label={setting.label}
+        value={String(value)}
+        onChange={onChange}
+        options={setting.options}
+      />
     );
   if (setting.type === "color")
     return (
@@ -418,43 +412,35 @@ function DeviceEditor({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <label>
-            Timezone
-            <input
-              required
-              list="timezones"
-              value={timezone}
-              onChange={(event) => setTimezone(event.target.value)}
-            />
-          </label>
-          <datalist id="timezones">
-            {zones.map((zone) => (
-              <option key={zone} value={zone} />
-            ))}
-          </datalist>
-          <label>
-            Screen face
-            <select
-              value={faceId}
-              onChange={(event) => {
-                setFaceId(event.target.value);
-                setSettings(
-                  validateSettings(
-                    faces.find(
-                      (face) => face.manifest.id === event.target.value,
-                    )!.manifest,
-                    {},
-                  ),
-                );
-              }}
-            >
-              {faces.map((face) => (
-                <option key={face.manifest.id} value={face.manifest.id}>
-                  {face.manifest.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="Timezone"
+            value={timezone}
+            searchable
+            onChange={setTimezone}
+            options={[...new Set([device.timezone, ...zones])]
+              .sort()
+              .map((zone) => ({
+                value: zone,
+                label: zone.replaceAll("_", " "),
+              }))}
+          />
+          <Select
+            label="Screen face"
+            value={faceId}
+            onChange={(value) => {
+              setFaceId(value);
+              setSettings(
+                validateSettings(
+                  faces.find((face) => face.manifest.id === value)!.manifest,
+                  {},
+                ),
+              );
+            }}
+            options={faces.map((face) => ({
+              value: face.manifest.id,
+              label: face.manifest.name,
+            }))}
+          />
           <div className="form-divider" />
           <span className="eyebrow">MAKE IT YOURS</span>
           {face.manifest.settings.length === 0 && (
@@ -518,7 +504,7 @@ function AddDevice({
     <Dialog title="A new place to unwind" onClose={onClose}>
       <form className="dialog-body" onSubmit={(event) => void submit(event)}>
         <p>
-          Give your display a name. Then open its private link on your tablet,
+          Give your display a name. Then open its permanent link on your tablet,
           monitor, or kiosk.
         </p>
         <label>
@@ -531,19 +517,15 @@ function AddDevice({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <label>
-          Start with a face
-          <select
-            value={faceId}
-            onChange={(event) => setFaceId(event.target.value)}
-          >
-            {faces.map((face) => (
-              <option key={face.manifest.id} value={face.manifest.id}>
-                {face.manifest.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label="Start with a face"
+          value={faceId}
+          onChange={setFaceId}
+          options={faces.map((face) => ({
+            value: face.manifest.id,
+            label: face.manifest.name,
+          }))}
+        />
         <small>
           Timezone: {localTimezone}. You can change this in display settings.
         </small>
@@ -561,17 +543,17 @@ function AddDevice({
   );
 }
 
-function Pairing({ url, onClose }: { url: string; onClose: () => void }) {
+function DisplayLink({ url, onClose }: { url: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
     <Dialog title="Your screen is ready" onClose={onClose}>
       <div className="dialog-body">
-        <div className="pairing-symbol">
+        <div className="display-link-symbol">
           <Icon name="display" />
         </div>
         <p>
-          Open this private link in your display’s browser. Keep it safe: anyone
-          with the link can view this display.
+          Open this permanent address in your display’s browser. You can always
+          find the same link here.
         </p>
         <label>
           Display URL
@@ -600,8 +582,8 @@ function Pairing({ url, onClose }: { url: string; onClose: () => void }) {
           </a>
         </div>
         <small>
-          The link’s secret is exchanged for a device-only cookie and removed
-          from the address bar. Generating another link revokes the old one.
+          This address stays the same, even if you rename the display. Anyone
+          who can reach this server can view it.
         </small>
       </div>
     </Dialog>
@@ -677,7 +659,7 @@ export function App() {
   const [notice, setNotice] = useState("");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Device>();
-  const [pairing, setPairing] = useState("");
+  const [displayLink, setDisplayLink] = useState("");
   const [installing, setInstalling] = useState<File>();
   const [removing, setRemoving] = useState<{
     id: string;
@@ -929,21 +911,15 @@ export function App() {
                         <div className="device-footer">
                           <button
                             className="text-button"
+                            aria-label={`Display link for ${device.name}`}
                             onClick={() =>
-                              void api<{ displayUrl: string }>(
-                                `/api/devices/${device.id}/pairing`,
-                                { method: "POST" },
+                              setDisplayLink(
+                                location.origin + device.displayUrl,
                               )
-                                .then((result) =>
-                                  setPairing(
-                                    location.origin + result.displayUrl,
-                                  ),
-                                )
-                                .catch((error) => setError(errorMessage(error)))
                             }
                           >
                             <Icon name="link" />
-                            New display link
+                            Display link
                           </button>
                           <button
                             className="text-button subdued"
@@ -1095,7 +1071,7 @@ export function App() {
             });
             await load();
             setAdding(false);
-            setPairing(location.origin + result.displayUrl);
+            setDisplayLink(location.origin + result.displayUrl);
           }}
         />
       )}
@@ -1115,7 +1091,9 @@ export function App() {
           }}
         />
       )}
-      {pairing && <Pairing url={pairing} onClose={() => setPairing("")} />}
+      {displayLink && (
+        <DisplayLink url={displayLink} onClose={() => setDisplayLink("")} />
+      )}
       {installing && (
         <Install
           file={installing}
@@ -1140,7 +1118,7 @@ export function App() {
           <div className="dialog-body">
             <p>
               {removing.type === "devices"
-                ? "This revokes the display’s link and removes its settings."
+                ? "This removes the display and its settings. Its address will stop working."
                 : "Switch any displays using this face to another face first. Its package will be deleted."}
             </p>
             <button

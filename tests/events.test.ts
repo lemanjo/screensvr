@@ -21,20 +21,14 @@ it("sends current state on every SSE connection, including after missed changes"
     headers,
     payload: { name: "Live", timezone: "UTC", faceId: "builtin-digital" },
   });
-  const { id, displayUrl } = created.json();
-  const pair = await app.inject({
-    method: "POST",
-    url: `/api/display/${id}/pair`,
-    payload: { token: displayUrl.split("#")[1] },
-  });
-  const deviceCookie = `screensvr_display=${pair.cookies[0].value}`;
+  const { id } = created.json();
   const address = await app.listen({ port: 0, host: "127.0.0.1" });
   async function stream() {
     const controller = new AbortController();
-    const response = await fetch(`${address}/api/display/${id}/events`, {
-      headers: { cookie: deviceCookie },
+    const response = await fetch(`${address}/api/display/live/events`, {
       signal: controller.signal,
     });
+    expect(response.status).toBe(200);
     const reader = response.body!.getReader();
     let buffer = "";
     async function state() {
@@ -82,20 +76,43 @@ it("sends current state on every SSE connection, including after missed changes"
       name: "Changed offline",
     });
     await app.inject({
-      method: "POST",
-      url: `/api/devices/${id}/pairing`,
+      method: "DELETE",
+      url: `/api/devices/${id}`,
       headers,
     });
     expect(await second.state()).toEqual({});
     expect(
       (
         await app.inject({
-          url: `/api/display/${id}/state`,
-          headers: { cookie: deviceCookie },
+          url: "/api/display/live/state",
         })
       ).statusCode,
-    ).toBe(401);
+    ).toBe(404);
   } finally {
     second.close();
   }
+});
+
+it("ends streams without removing displays during a server restart", async () => {
+  directory = await temporaryDirectory("screensvr-events-restart-");
+  server = await createApp({ dataDir: directory });
+  const headers = await administrator(server.app);
+  await server.app.inject({
+    method: "POST",
+    url: "/api/devices",
+    headers,
+    payload: { name: "Olohuone", timezone: "UTC", faceId: "builtin-digital" },
+  });
+  const address = await server.app.listen({ port: 0, host: "127.0.0.1" });
+  const response = await fetch(`${address}/api/display/olohuone/events`);
+  expect(response.status).toBe(200);
+  const stream = response.text();
+  await server.app.close();
+  const messages = await stream;
+  expect(messages).toContain("event: state");
+  expect(messages).not.toContain("event: removed");
+  server = await createApp({ dataDir: directory });
+  expect(
+    (await server.app.inject("/api/display/olohuone/state")).json(),
+  ).toMatchObject({ displayUrl: "/display/olohuone", name: "Olohuone" });
 });

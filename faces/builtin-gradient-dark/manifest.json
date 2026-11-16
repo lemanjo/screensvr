@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "builtin-gradient-dark",
+  "version": "1.0.0",
+  "name": "Color Drift Night",
+  "description": "Color Drift after dark. Midnight indigo, deep plum, and quiet teal move behind a moonlit, numberless clock.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "settings": [
+    {
+      "key": "colorOne",
+      "label": "Indigo tone",
+      "type": "color",
+      "default": "#171e3b"
+    },
+    {
+      "key": "colorTwo",
+      "label": "Plum tone",
+      "type": "color",
+      "default": "#392541"
+    },
+    {
+      "key": "colorThree",
+      "label": "Teal tone",
+      "type": "color",
+      "default": "#123b42"
+    },
+    {
+      "key": "clockColor",
+      "label": "Clock color",
+      "type": "color",
+      "default": "#e2e8f2"
+    },
+    {
+      "key": "animate",
+      "label": "Animate gradient",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}

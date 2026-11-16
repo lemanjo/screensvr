@@ -105,6 +105,7 @@ export type Settings = Record<string, string | number | boolean>;
 export type Face = { manifest: FaceManifest; builtin: boolean };
 export type DisplayState = {
   id: string;
+  displayUrl: string;
   name: string;
   timezone: string;
   revision: number;
@@ -113,6 +114,7 @@ export type DisplayState = {
 };
 export type Device = {
   id: string;
+  displayUrl: string;
   name: string;
   timezone: string;
   revision: number;

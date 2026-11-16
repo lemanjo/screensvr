@@ -3,13 +3,13 @@ import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import staticFiles from "@fastify/static";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { validateSettings } from "../shared/contracts.js";
-import { auth, hash, passwordHash, passwordMatches, secret } from "./auth.js";
+import { auth, hash, passwordHash, passwordMatches } from "./auth.js";
 import { Store } from "./db.js";
 import { Events } from "./events.js";
 import { faceAssetRoot, Faces, UserError, ZIP_LIMIT } from "./faces.js";
@@ -41,7 +41,6 @@ const updateDevice = z
     settings: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
-const deviceCookie = "screensvr_display";
 const mime: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -213,6 +212,7 @@ export async function createApp(options: AppOptions) {
   app.get("/api/devices", { preHandler: security.requireAdmin }, async () =>
     store.devices().map((row) => ({
       id: row.id,
+      displayUrl: `/display/${row.slug}`,
       name: row.name,
       timezone: row.timezone,
       revision: row.revision,
@@ -230,22 +230,20 @@ export async function createApp(options: AppOptions) {
       const face = store.face(input.faceId);
       if (!face) throw new UserError("Face not found.", 404);
       const id = randomUUID();
-      const token = secret();
+      const slug = store.availableSlug(input.name);
       store.db
         .prepare(
-          "INSERT INTO devices (id, name, face_id, settings, timezone, token_hash) VALUES (?, ?, ?, ?, ?, ?)",
+          "INSERT INTO devices (id, slug, name, face_id, settings, timezone) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .run(
           id,
+          slug,
           input.name,
           input.faceId,
           JSON.stringify(validateSettings(face.manifest, {})),
           input.timezone,
-          hash(token),
         );
-      return reply
-        .code(201)
-        .send({ id, displayUrl: `/display/${id}#${token}` });
+      return reply.code(201).send({ id, displayUrl: `/display/${slug}` });
     },
   );
   app.patch<{ Params: { id: string } }>(
@@ -288,20 +286,6 @@ export async function createApp(options: AppOptions) {
       return store.state(current.id);
     },
   );
-  app.post<{ Params: { id: string } }>(
-    "/api/devices/:id/pairing",
-    { preHandler: security.requireAdmin },
-    async (request) => {
-      const id = request.params.id;
-      if (!store.device(id)) throw new UserError("Display not found.", 404);
-      const token = secret();
-      store.db
-        .prepare("UPDATE devices SET token_hash = ? WHERE id = ?")
-        .run(hash(token), id);
-      events.disconnect(id);
-      return { displayUrl: `/display/${id}#${token}` };
-    },
-  );
   app.delete<{ Params: { id: string } }>(
     "/api/devices/:id",
     { preHandler: security.requireAdmin },
@@ -315,64 +299,20 @@ export async function createApp(options: AppOptions) {
       return { ok: true };
     },
   );
-  app.post<{ Params: { id: string } }>(
-    "/api/display/:id/pair",
-    {
-      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
-    },
-    async (request, reply) => {
-      const { token } = z
-        .object({ token: z.string().regex(/^[a-f0-9]{64}$/) })
-        .strict()
-        .parse(request.body);
-      const row = store.device(request.params.id);
-      if (
-        !row ||
-        !timingSafeEqual(Buffer.from(hash(token)), Buffer.from(row.token_hash))
-      )
-        throw new UserError(
-          "Invalid display link. Generate a new link in management.",
-          401,
-        );
-      reply.setCookie(deviceCookie, token, {
-        httpOnly: true,
-        sameSite: "strict",
-        secure: options.secureCookies ?? false,
-        path: `/api/display/${row.id}`,
-        maxAge: 365 * 86400,
-      });
-      return { ok: true };
-    },
-  );
-  function displayAuthorized(
-    id: string,
-    cookies: Record<string, string | undefined>,
-  ) {
-    const token = cookies[deviceCookie];
-    const row = store.device(id);
-    return (
-      row &&
-      token?.length === 64 &&
-      timingSafeEqual(Buffer.from(hash(token)), Buffer.from(row.token_hash))
-    );
-  }
-  app.get<{ Params: { id: string } }>(
-    "/api/display/:id/state",
+  app.get<{ Params: { slug: string } }>(
+    "/api/display/:slug/state",
     async (request) => {
-      if (!displayAuthorized(request.params.id, request.cookies))
-        throw new UserError(
-          "This screen needs pairing. Open a fresh display link from management.",
-          401,
-        );
-      return store.state(request.params.id);
+      const row = store.display(request.params.slug);
+      if (!row) throw new UserError("Display not found.", 404);
+      return store.state(row.id);
     },
   );
-  app.get<{ Params: { id: string } }>(
-    "/api/display/:id/events",
+  app.get<{ Params: { slug: string } }>(
+    "/api/display/:slug/events",
     async (request, reply) => {
-      const id = request.params.id;
-      if (!displayAuthorized(id, request.cookies))
-        throw new UserError("This screen needs pairing.", 401);
+      const row = store.display(request.params.slug);
+      if (!row) throw new UserError("Display not found.", 404);
+      const id = row.id;
       if (!events.add(id, reply.raw, store))
         throw new UserError("Too many display connections.", 429);
       reply.hijack();
@@ -441,8 +381,14 @@ export async function createApp(options: AppOptions) {
       index: false,
     });
     app.get("/", async (_request, reply) => reply.sendFile("index.html"));
-    app.get("/display/:id", async (_request, reply) =>
-      reply.sendFile("index.html"),
+    app.get<{ Params: { slug: string } }>(
+      "/display/:slug",
+      async (request, reply) => {
+        const row = store.display(request.params.slug);
+        if (row && request.params.slug !== row.slug)
+          return reply.redirect(`/display/${row.slug}`, 301);
+        return reply.sendFile("index.html");
+      },
     );
   }
   app.setNotFoundHandler((_request, reply) =>

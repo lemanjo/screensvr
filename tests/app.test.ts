@@ -42,7 +42,7 @@ describe("administrator security", () => {
     expect(store.getMeta("password")).not.toContain("a-long-test-password");
     expect(
       (await app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(
       (
         await app.inject({
@@ -168,38 +168,34 @@ describe("devices", () => {
       settings: { caption: "Be here, now." },
     });
   });
-  it("isolates device access, validates changes, and revokes old pairing links", async () => {
+  it("serves read-only displays at permanent URLs and validates administrator changes", async () => {
     const { app } = server;
     const headers = await administrator(app);
     const create = await app.inject({
       method: "POST",
       url: "/api/devices",
       headers,
-      payload: { name: "Hallway", timezone: "UTC", faceId: "builtin-digital" },
+      payload: { name: "Olohuone", timezone: "UTC", faceId: "builtin-digital" },
     });
     expect(create.statusCode).toBe(201);
     const { id, displayUrl } = create.json();
-    expect((await app.inject(`/api/display/${id}/state`)).statusCode).toBe(401);
-    const pair = await app.inject({
-      method: "POST",
-      url: `/api/display/${id}/pair`,
-      payload: { token: displayUrl.split("#")[1] },
-    });
-    const deviceHeaders = {
-      cookie: `screensvr_display=${pair.cookies[0].value}`,
-    };
-    expect(pair.headers["set-cookie"]).toContain(`Path=/api/display/${id}`);
+    expect(displayUrl).toBe("/display/olohuone");
+    expect(
+      (await app.inject("/api/display/olohuone/state")).json(),
+    ).toMatchObject({ id, displayUrl, name: "Olohuone" });
+    // Old UUID bookmarks continue to resolve to the same display.
+    expect(
+      (await app.inject(`/api/display/${id}/state`)).json().displayUrl,
+    ).toBe(displayUrl);
+    expect((await app.inject("/api/devices")).statusCode).toBe(401);
     expect(
       (
         await app.inject({
-          url: `/api/display/${id}/state`,
-          headers: deviceHeaders,
+          method: "PATCH",
+          url: `/api/devices/${id}`,
+          payload: { revision: 1, name: "Unauthorized" },
         })
-      ).json().name,
-    ).toBe("Hallway");
-    expect(
-      (await app.inject({ url: "/api/devices", headers: deviceHeaders }))
-        .statusCode,
+      ).statusCode,
     ).toBe(401);
     const save = (payload: object) =>
       app.inject({
@@ -223,31 +219,21 @@ describe("devices", () => {
       (await save({ revision: 2, faceId: "builtin-analog" })).json().settings
         .caption,
     ).toBe("Make time for less.");
-    await app.inject({
-      method: "POST",
-      url: `/api/devices/${id}/pairing`,
-      headers,
-    });
     expect(
-      (
-        await app.inject({
-          url: `/api/display/${id}/state`,
-          headers: deviceHeaders,
-        })
-      ).statusCode,
-    ).toBe(401);
+      (await save({ revision: 3, name: "Renamed living room" })).json(),
+    ).toMatchObject({ name: "Renamed living room", displayUrl, revision: 4 });
+    expect(
+      (await app.inject({ url: "/api/devices", headers })).json()[0],
+    ).toMatchObject({ displayUrl });
     expect(
       (
         await app.inject({
           method: "POST",
-          url: `/api/display/${id}/pair`,
-          payload: { token: displayUrl.split("#")[1] },
+          url: `/api/devices/${id}/pairing`,
+          headers,
         })
       ).statusCode,
-    ).toBe(401);
-    expect(
-      (await app.inject({ url: "/api/devices", headers })).json()[0],
-    ).not.toHaveProperty("token_hash");
+    ).toBe(404);
     expect(
       (
         await app.inject({
@@ -257,6 +243,36 @@ describe("devices", () => {
         })
       ).statusCode,
     ).toBe(200);
+    expect((await app.inject("/api/display/olohuone/state")).statusCode).toBe(
+      404,
+    );
+    expect((await app.inject("/api/display/olohuone/events")).statusCode).toBe(
+      404,
+    );
+  });
+  it("normalizes names and gives duplicate URLs deterministic, unique suffixes", async () => {
+    const headers = await administrator(server.app);
+    for (const [name, slug] of [
+      ["Olohuone", "olohuone"],
+      ["Olohuone!", "olohuone-2"],
+      ["Olohuone 2", "olohuone-2-2"],
+      ["OLOHUONE", "olohuone-3"],
+      ["  Keittiö & työhuone  ", "keittio-tyohuone"],
+      ["!!!", "display"],
+      ["🌙", "display-2"],
+    ]) {
+      const response = await server.app.inject({
+        method: "POST",
+        url: "/api/devices",
+        headers,
+        payload: { name, timezone: "UTC", faceId: "builtin-digital" },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(response.json().displayUrl).toBe(`/display/${slug}`);
+      expect(
+        (await server.app.inject(`/api/display/${slug}/state`)).json().name,
+      ).toBe(name.trim());
+    }
   });
   it("persists assignments and authentication across restarts", async () => {
     const headers = await administrator(server.app);
@@ -276,6 +292,7 @@ describe("devices", () => {
       (await server.app.inject({ url: "/api/devices", headers })).json()[0],
     ).toMatchObject({
       name: "Persistent",
+      displayUrl: "/display/persistent",
       faceId: "builtin-analog",
       timezone: "Europe/Berlin",
     });
@@ -417,7 +434,7 @@ describe("ZIP faces", () => {
     expect(await readdir(`${dataDir}/faces`)).toEqual([]);
     expect(
       (await server.app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
   });
   it("limits incoming ZIP size", async () => {
     const headers = await administrator(server.app);
@@ -448,6 +465,6 @@ describe("ZIP faces", () => {
     ).toBe(404);
     expect(
       (await server.app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(3);
+    ).toHaveLength(5);
   });
 });
