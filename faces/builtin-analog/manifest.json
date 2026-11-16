@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "builtin-analog",
+  "version": "1.0.0",
+  "name": "Soft Orbit",
+  "description": "An understated analog face with a warm, paper-like finish.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "settings": [
+    {
+      "key": "accent",
+      "label": "Second hand",
+      "type": "color",
+      "default": "#bc674b"
+    },
+    {
+      "key": "background",
+      "label": "Background",
+      "type": "color",
+      "default": "#ede8dd"
+    },
+    {
+      "key": "showSeconds",
+      "label": "Show second hand",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "caption",
+      "label": "A small reminder",
+      "type": "text",
+      "default": "Make time for less."
+    }
+  ]
+}

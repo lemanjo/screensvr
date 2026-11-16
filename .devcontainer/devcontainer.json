@@ -1,0 +1,80 @@
+{
+  "name": "screensvr",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1.10.2": {
+      "moby": false
+    },
+    "ghcr.io/devcontainers/features/github-cli:1.1.3": {}
+  },
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
+  "init": true,
+  "runArgs": ["--shm-size=1g"],
+  "mounts": [
+    {
+      "source": "${localEnv:SCREENSVR_DOCKER_SOCKET:/var/run/docker.sock}",
+      "target": "/var/run/docker-host.sock",
+      "type": "bind"
+    }
+  ],
+  "remoteEnv": {
+    "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
+  },
+  "forwardPorts": [3000, 5173, 4173, 51204, 9323, 9229],
+  "portsAttributes": {
+    "3000": {
+      "label": "Fastify API",
+      "onAutoForward": "notify"
+    },
+    "5173": {
+      "label": "Vite development server",
+      "onAutoForward": "notify"
+    },
+    "4173": {
+      "label": "Vite preview",
+      "onAutoForward": "silent"
+    },
+    "51204": {
+      "label": "Vitest UI",
+      "onAutoForward": "silent"
+    },
+    "9323": {
+      "label": "Playwright report",
+      "onAutoForward": "silent"
+    },
+    "9229": {
+      "label": "Node.js debugger",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-playwright.playwright",
+        "vitest.explorer",
+        "qwtel.sqlite-viewer"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "files.watcherExclude": {
+          "**/node_modules/**": true,
+          "**/coverage/**": true,
+          "**/playwright-report/**": true,
+          "**/test-results/**": true
+        },
+        "remote.localPortHost": "localhost"
+      }
+    }
+  }
+}

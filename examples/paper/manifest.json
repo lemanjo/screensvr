@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "paper",
+  "version": "1.0.0",
+  "name": "Paper",
+  "description": "A little handwritten-feeling reminder and the passing hours.",
+  "author": "screensvr example",
+  "entry": "index.html",
+  "settings": [
+    {
+      "key": "caption",
+      "label": "Your reminder",
+      "type": "text",
+      "default": "There is no hurry."
+    },
+    {
+      "key": "accent",
+      "label": "Ink color",
+      "type": "color",
+      "default": "#52634b"
+    },
+    {
+      "key": "scale",
+      "label": "Text scale",
+      "type": "number",
+      "default": 1,
+      "min": 0.5,
+      "max": 2,
+      "step": 0.1
+    },
+    {
+      "key": "showDate",
+      "label": "Show date",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}

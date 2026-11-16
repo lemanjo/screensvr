@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!tooling/
+!tooling/package.json
+!tooling/package-lock.json
+!tooling/check-browsers.mjs

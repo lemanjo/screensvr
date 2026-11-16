@@ -1,0 +1,103 @@
+:root {
+  --accent: #bc674b;
+  --background: #ede8dd;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: #48493e;
+  font-family: system-ui, sans-serif;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+#dial {
+  width: 59vmin;
+  height: 59vmin;
+  border-radius: 50%;
+  position: relative;
+  background: radial-gradient(circle at 30% 30%, #ffffff44, #ffffff00);
+  box-shadow:
+    0 1vmin 8vmin #39331c0b,
+    inset 0 0 0 1px #48493e0d;
+}
+.mark {
+  position: absolute;
+  left: calc(50% - 0.15vmin);
+  top: 3vmin;
+  width: 0.3vmin;
+  height: 1.5vmin;
+  background: #48493e66;
+  transform-origin: center 26.5vmin;
+}
+.mark.major {
+  width: 0.5vmin;
+  height: 2.4vmin;
+  background: #48493e;
+}
+.hand {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  transform-origin: 50% 100%;
+  border-radius: 1vmin;
+}
+.hour {
+  width: 1vmin;
+  margin-left: -0.5vmin;
+  height: 15vmin;
+  background: #48493e;
+}
+.minute {
+  width: 0.65vmin;
+  margin-left: -0.325vmin;
+  height: 21vmin;
+  background: #48493e;
+}
+.second {
+  width: 0.3vmin;
+  margin-left: -0.15vmin;
+  height: 23vmin;
+  background: var(--accent);
+}
+.pin {
+  position: absolute;
+  width: 1.7vmin;
+  height: 1.7vmin;
+  border-radius: 50%;
+  background: var(--accent);
+  left: calc(50% - 0.85vmin);
+  top: calc(50% - 0.85vmin);
+}
+.brand {
+  position: absolute;
+  top: 31%;
+  width: 100%;
+  text-align: center;
+  font-size: 1.5vmin;
+  letter-spacing: 0.2em;
+  opacity: 0.5;
+}
+#date {
+  margin-top: 5vmin;
+  font-size: clamp(8px, 1.8vmin, 22px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+#caption {
+  margin-top: 2vmin;
+  font:
+    italic clamp(10px, 2.8vmin, 30px) Georgia,
+    serif;
+}

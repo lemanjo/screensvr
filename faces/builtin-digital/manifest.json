@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "builtin-digital",
+  "version": "1.0.0",
+  "name": "Slow Hours",
+  "description": "A quiet digital clock, soft light, and room to breathe.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "settings": [
+    {
+      "key": "accent",
+      "label": "Ambient color",
+      "type": "color",
+      "default": "#b4cdad"
+    },
+    {
+      "key": "background",
+      "label": "Background",
+      "type": "color",
+      "default": "#15231e"
+    },
+    {
+      "key": "format",
+      "label": "Time format",
+      "type": "select",
+      "default": "24",
+      "options": [
+        { "label": "24 hour", "value": "24" },
+        { "label": "12 hour", "value": "12" }
+      ]
+    },
+    {
+      "key": "showSeconds",
+      "label": "Show seconds",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "key": "caption",
+      "label": "A small reminder",
+      "type": "text",
+      "default": "Be here, now."
+    }
+  ]
+}

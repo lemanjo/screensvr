@@ -1,0 +1,87 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.vite/
+
+# Environment and package-registry credentials
+# Only commit sanitized examples; ignore rules do not detect secret contents.
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+.envrc
+.npmrc
+.pypirc
+.netrc
+.git-credentials
+
+# Private keys and identity stores
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+id_dsa
+id_dsa.*
+
+# Integration credentials and local secret stores
+secrets/
+.secrets/
+secrets.json
+secrets.yaml
+secrets.yml
+credentials/
+credentials.json
+credentials.yaml
+credentials.yml
+service-account*.json
+service_account*.json
+.ssh/
+.aws/
+.azure/
+.kube/
+**/.config/gcloud/
+**/.docker/config.json
+
+# Local agent folders (including nested folders)
+agents/
+.agents/
+
+# Local runtime data and caches
+/data/
+/backups/
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.log
+.cache/
+.npm/
+
+# Editor temporary files and backups
+*.swp
+*.swo
+*~
+*.bak
+*.backup
+
+# Operating system files
+.DS_Store
+Thumbs.db
