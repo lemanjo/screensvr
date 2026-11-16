@@ -142,10 +142,10 @@ Each face has its own options for colors, clock style, or animation.
 
 ## Add more faces
 
-Open **Face library** to browse your collection. To add a face, choose **Install
-ZIP** and select a face package. No server rebuild is needed.
+Open **Face library** to browse your collection. To add a face, choose **Install a
+face** and select a face package. No server rebuild is needed.
 
-![The face library showing the four bundled clock faces and the Install ZIP button](docs/images/face-library.png)
+![The face library showing the four bundled clock faces and the Install a face button](docs/images/face-library.png)
 
 Only install packages from sources you trust. Faces run JavaScript; the sandbox
 adds protection but does not make untrusted code safe.
@@ -179,3 +179,7 @@ npm run test:e2e
 Browser tests use Chromium, Firefox, and WebKit. Actual Fully Kiosk/Android
 hardware still needs device testing. See the [development guide](docs/development.md)
 for more details.
+
+## License
+
+Licensed under the [MIT License](LICENSE).

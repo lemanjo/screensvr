@@ -750,11 +750,6 @@ export function App() {
           <div className="local-card">
             <Icon name="leaf" />
             <strong>A little less connected.</strong>
-            <p>
-              Everything lives right here.
-              <br />
-              No cloud. No noise.
-            </p>
             <span>
               <span className="status-dot" /> LOCAL & LOVELY
             </span>
@@ -824,7 +819,7 @@ export function App() {
               }
             >
               <Icon name={page === "displays" ? "plus" : "upload"} />
-              {page === "displays" ? "Add display" : "Install ZIP"}
+              {page === "displays" ? "Add display" : "Install a face"}
             </button>
           </section>
           {page === "displays" ? (
@@ -947,16 +942,6 @@ export function App() {
                   </button>
                 </div>
               )}
-              <section className="bottom-note">
-                <span className="note-symbol">✳</span>
-                <div>
-                  <strong>Made for being, not doing.</strong>
-                  <p>
-                    Open a display link in Fully Kiosk Browser or any modern
-                    browser. We’ll take care of the atmosphere.
-                  </p>
-                </div>
-              </section>
             </>
           ) : (
             <>
@@ -1014,23 +999,6 @@ export function App() {
                   </article>
                 ))}
               </div>
-              <section className="bottom-note">
-                <Icon name="upload" />
-                <div>
-                  <strong>A small package. A whole new atmosphere.</strong>
-                  <p>
-                    Install a face ZIP from a source you trust. Packages stay on
-                    your server; no registry or cloud is required.
-                  </p>
-                </div>
-                <button
-                  className="text-button"
-                  onClick={() => input.current?.click()}
-                >
-                  Install a face
-                  <Icon name="arrow" />
-                </button>
-              </section>
             </>
           )}
           <footer className="page-footer">
