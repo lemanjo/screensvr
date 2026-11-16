@@ -2,9 +2,60 @@
 
 ## Single container
 
+To build from the checked-out source:
+
 ```sh
 docker compose up --build -d
 ```
+
+### Published release images
+
+Once a release has successfully published, the public image is available at
+`ghcr.io/lemanjo/screensvr:v0.1.0` (replace the version as appropriate). Published
+images initially support **linux/amd64**.
+
+To use an image without building locally, create a separate Compose file such
+as `compose.release.yaml` with:
+
+```yaml
+services:
+  screensvr:
+    image: ghcr.io/lemanjo/screensvr:v0.1.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - screensvr-data:/data
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  screensvr-data:
+```
+
+Start it with `docker compose -f compose.release.yaml up -d`. Use the same
+Compose project name/directory when switching from the source-built service so
+the existing named data volume is preserved.
+
+For exact deployments, replace the tag with the digest from the release
+workflow's run summary, for example
+`ghcr.io/lemanjo/screensvr@sha256:…`. Before deploying, verify its provenance:
+
+```sh
+gh attestation verify \
+  oci://ghcr.io/lemanjo/screensvr@sha256:REPLACE_WITH_ACTUAL_DIGEST \
+  --repo lemanjo/screensvr
+```
+
+The workflow also publishes an attested CycloneDX SBOM. Attestations identify the
+source and workflow; they do not guarantee the software is vulnerability-free.
+See [release security](releasing.md) for the publishing process and first-package
+visibility setup.
+
+### First-run setup
 
 Visit `http://<server>:3000` and complete administrator setup immediately on a
 trusted network. Add a display and open its permanent address in Fully Kiosk Browser
