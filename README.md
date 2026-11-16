@@ -45,6 +45,12 @@ The named `screensvr-data` volume persists settings, authentication, and install
 faces. See [deployment and backups](docs/deployment.md) before exposing the server
 or upgrading it.
 
+Published releases provide `ghcr.io/lemanjo/screensvr:vVERSION` images for
+Linux amd64, with build provenance and an SBOM. See the
+[published-image instructions](docs/deployment.md#published-release-images)
+and [release security](docs/releasing.md). The first image becomes available
+after the first successful release workflow.
+
 ### Run locally
 
 Requires Node.js 24 LTS.

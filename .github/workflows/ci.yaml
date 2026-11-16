@@ -1,15 +1,31 @@
 name: CI
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_call:
+    outputs:
+      archive-sha256:
+        description: Checksum of the scanned release image archive
+        value: ${{ jobs.container.outputs.archive-sha256 }}
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: npm
@@ -18,10 +34,93 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx --no-install playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: browser-results
           path: test-results
+          retention-days: 1
+          overwrite: true
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - run: bash .github/scripts/install-security-tools.sh gitleaks actionlint
+      - name: Scan all fetched Git history for secrets
+        run: gitleaks git --redact --no-banner --log-opts=--all .
+      - name: Validate workflows and shell scripts
+        run: |
+          actionlint
+          shellcheck .github/scripts/*.sh
+      - run: npm audit --ignore-scripts --audit-level=high
+      - run: npm audit --prefix .devcontainer/tooling --ignore-scripts --audit-level=high
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      archive-sha256: ${{ steps.checksum.outputs.sha256 }}
+    env:
+      # Build records otherwise create an additional, long-lived artifact.
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash .github/scripts/install-security-tools.sh trivy
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          version: v0.39.0
+          driver: docker
+          cache-binary: false
+      - name: Build without registry credentials or write permissions
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          tags: screensvr:release
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: false
+      - name: Archive the built image for scanning and release handoff
+        # The docker driver loads builds automatically but cannot export a tar
+        # directly on runners without the containerd image store.
+        run: docker image save --output "$RUNNER_TEMP/image.tar" screensvr:release
+      - name: Scan fixable high and critical vulnerabilities
+        run: |
+          trivy image --input "$RUNNER_TEMP/image.tar" \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --timeout 10m
+      - name: Generate CycloneDX SBOM
+        run: |
+          trivy image --input "$RUNNER_TEMP/image.tar" \
+            --format cyclonedx --output "$RUNNER_TEMP/sbom.cdx.json"
+      - name: Smoke-test the production container
+        run: |
+          docker load --input "$RUNNER_TEMP/image.tar"
+          bash .github/scripts/smoke-test-container.sh
+      - name: Checksum the tested image
+        id: checksum
+        run: echo "sha256=$(sha256sum "$RUNNER_TEMP/image.tar" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Transfer the exact scanned image to the release publisher
+        if: github.event_name == 'release'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-image
+          path: |
+            ${{ runner.temp }}/image.tar
+            ${{ runner.temp }}/sbom.cdx.json
+          retention-days: 1
+          compression-level: 0
+          overwrite: true

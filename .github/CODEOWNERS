@@ -1,0 +1,8 @@
+# Notifications and ownership only: solo-maintainer rules require zero approvals.
+/.github/ @lemanjo
+/Dockerfile @lemanjo
+/.dockerignore @lemanjo
+/package.json @lemanjo
+/package-lock.json @lemanjo
+/.devcontainer/ @lemanjo
+/SECURITY.md @lemanjo

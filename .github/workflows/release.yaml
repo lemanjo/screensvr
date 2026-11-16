@@ -1,0 +1,145 @@
+name: Release container
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+# Serialize all releases, including re-runs, so latest cannot race another release.
+concurrency:
+  group: release-container
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.repository == 'lemanjo/screensvr'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      image: ${{ steps.release.outputs.image }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate immutable release, version, and main ancestry
+        id: release
+        run: node .github/scripts/validate-release.ts
+
+  checks:
+    needs: validate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yaml
+
+  publish:
+    needs: [validate, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    env:
+      IMAGE: ${{ needs.validate.outputs.image }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+      ARCHIVE_SHA256: ${{ needs.checks.outputs.archive-sha256 }}
+    steps:
+      # Deliberately no checkout: do not run repository or dependency code here.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-image
+          path: ${{ runner.temp }}/release-image
+          digest-mismatch: error
+      - name: Verify and load the scanned artifact
+        working-directory: ${{ runner.temp }}/release-image
+        run: |
+          [[ "$ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          printf '%s  image.tar\n' "$ARCHIVE_SHA256" | sha256sum --check --strict
+          docker load --input image.tar
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse to replace an existing version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" \
+            > "$RUNNER_TEMP/existing-manifest" 2> "$RUNNER_TEMP/manifest-error"; then
+            echo "::error::This container version already exists. Publish a new release instead."
+            exit 1
+          fi
+          # Fail closed on authentication, network, and other unexpected errors.
+          if ! grep -Eiq 'manifest unknown|not found|no such manifest|name unknown' \
+            "$RUNNER_TEMP/manifest-error"; then
+            # GHCR can deny manifest reads before a package's first push.
+            # Only permit that bootstrap case if GitHub confirms no package exists.
+            status=$(curl --silent --show-error --location \
+              --proto '=https' --proto-redir '=https' \
+              --output "$RUNNER_TEMP/package-response" --write-out '%{http_code}' \
+              --header "Authorization: Bearer $GH_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/users/$GITHUB_REPOSITORY_OWNER/packages/container/${IMAGE##*/}")
+            if [[ "$status" != 404 ]]; then
+              cat "$RUNNER_TEMP/manifest-error"
+              exit 1
+            fi
+          fi
+      - name: Publish version and commit tags
+        id: push
+        run: |
+          docker tag screensvr:release "$IMAGE:$VERSION"
+          docker tag screensvr:release "$IMAGE:sha-$RELEASE_SHA"
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:sha-$RELEASE_SHA"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" \
+            --format '{{json .Manifest}}' | jq -r '.digest')
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          # Storage records are organization-only; this is a personal repository.
+          create-storage-record: false
+      - name: Attest the image's SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/release-image/sbom.cdx.json
+          push-to-registry: true
+          create-storage-record: false
+      - name: Update latest only for GitHub's current latest stable release
+        if: ${{ !contains(env.VERSION, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')
+          if [[ "$latest" == "$VERSION" && "$VERSION" != *-* ]]; then
+            docker tag screensvr:release "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+      - name: Record the immutable deployment reference
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "Published \`$IMAGE:$VERSION\` (linux/amd64)."
+            echo
+            echo "Pinned deployment: \`$IMAGE@$DIGEST\`"
+            echo
+            echo "Verify: \`gh attestation verify oci://$IMAGE@$DIGEST --repo $GITHUB_REPOSITORY\`"
+          } >> "$GITHUB_STEP_SUMMARY"
