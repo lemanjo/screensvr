@@ -1,6 +1,7 @@
 # Only send production build inputs to the builder.
 **
 !Dockerfile
+!LICENSE
 !package.json
 !package-lock.json
 !tsconfig.json

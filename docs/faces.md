@@ -20,7 +20,7 @@ ZIP the **contents**, not an enclosing folder. After building screensvr:
 zip -j dist/paper.zip examples/paper/*
 ```
 
-Install `dist/paper.zip` through **Face library → Install ZIP**, then assign it
+Install `dist/paper.zip` through **Face library → Install a face**, then assign it
 in a display's settings. There are no server-side scripts or npm install hooks.
 
 ## Manifest v1
