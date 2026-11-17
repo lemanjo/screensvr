@@ -45,13 +45,17 @@ it("refuses symlinks without reading or chmodding their targets", async () => {
   expect((await stat(target)).mode & 0o777).toBe(0o640);
 });
 
-it("does not replace missing or malformed keys when credentials already exist", async () => {
+it("does not replace a missing key when credentials already exist", async () => {
   const file = path.join(directory, "integration-key");
   expect(() => new Secrets(directory, true).encrypt("test-only-token")).toThrow(
     "key is missing or invalid",
   );
   await expect(stat(file)).rejects.toMatchObject({ code: "ENOENT" });
-  await writeFile(file, "not-a-valid-key");
+});
+
+it("does not replace a malformed key when credentials already exist", async () => {
+  const file = path.join(directory, "integration-key");
+  await writeFile(file, "not-a-valid-key", { flag: "wx", mode: 0o600 });
   expect(() => new Secrets(directory, true).encrypt("test-only-token")).toThrow(
     "key is missing or invalid",
   );
