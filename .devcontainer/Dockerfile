@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/javascript-node:5.2.6-24-bookworm
+FROM mcr.microsoft.com/devcontainers/javascript-node:5-26-bookworm
 
 USER root
 
