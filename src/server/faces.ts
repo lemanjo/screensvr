@@ -32,6 +32,7 @@ export class Faces {
       "builtin-gradient",
       "builtin-gradient-dark",
       "builtin-stillroom",
+      "builtin-photos",
     ]) {
       const manifest = manifestSchema.parse(
         JSON.parse(

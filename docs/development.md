@@ -95,6 +95,12 @@ Bootstrap tools do not replace project dependencies. Use npm scripts so
 project-local versions take precedence. Test files cannot import packages from
 the isolated bootstrap installation.
 
+Photo processing uses the pinned `sharp` dependency and its platform-specific
+prebuilt libvips binaries. Keep optional npm dependencies enabled when installing
+for production. Export `SCREENSVR_PHOTOS_DIR` to try a local read-only photo
+directory during development. Browser tests create their own small photo fixtures
+inside temporary storage; no NAS or personal photos are required.
+
 On container creation, setup runs `npm ci` if a root `package.json` and
 `package-lock.json` exist. A missing lockfile is reported rather than generating
 one implicitly. Setup then verifies the tools, SQLite read/write operations, and actual

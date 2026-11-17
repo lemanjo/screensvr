@@ -5,7 +5,7 @@ import { chmodSync } from "node:fs";
 
 export type IntegrationRow = {
   id: string;
-  type: "home-assistant";
+  type: "home-assistant" | "mounted-folder";
   name: string;
   base_url: string;
   credentials: string;

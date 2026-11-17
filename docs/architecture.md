@@ -16,12 +16,13 @@ directory share one persistent data volume. No cloud service is required.
 | `src/server/integrations/`      | Built-in server-side connectors, management routes, live caches |
 | `src/server/display-state.ts`   | Selected-data projection and ordered display snapshots          |
 | `src/server/integration-key.ts` | Authenticated encryption and persistent integration key         |
+| `src/server/photos.ts`          | Scoped photo capabilities and bounded resized-image cache       |
 | `src/shared/contracts.ts`       | Versioned manifests and configuration validation                |
 | `web/src/App.tsx`               | Administrator setup, display management, face library           |
 | `web/src/Display.tsx`           | Permanent display addresses, reconnects, fullscreen, wake locks |
 | `web/src/FaceFrame.tsx`         | Shared preview/display renderer and message bridge              |
 | `public/face-sdk.js`            | Framework-independent browser SDK                               |
-| `faces/`                        | Five immutable bundled faces                                    |
+| `faces/`                        | Six immutable bundled faces                                     |
 
 Vite builds the frontend; TypeScript compiles the server. Management is loaded
 separately from the display client so displays do not download the management UI
@@ -102,6 +103,8 @@ An HTTP sandbox CSP also protects face documents opened directly. Face CSP
 blocks fetch/WebSocket access, nested frames, forms, workers, and external
 origins. Public face assets allow anonymous CORS for ES modules and fonts from
 the sandbox's opaque origin; API responses do not.
+The scoped photo endpoint separately permits anonymous CORS for image/canvas use;
+it never accepts paths or exposes management APIs.
 
 The shell transfers a MessagePort to the iframe. The SDK passes only validated
 settings, non-secret display context, and explicitly selected normalized input
@@ -112,6 +115,9 @@ Preview and display use the same renderer and protocol.
 Manifest v1/protocol v1 remain supported. Manifest v2 declares optional typed
 inputs and requires data-capable protocol v2. The SDK locally expires ready
 readings and notifies faces of stale status during network loss/sleep.
+Manifest v3/protocol v3 adds image inputs. The host projects a collection count,
+revision, and opaque scoped URL instead of copying the file list into snapshots.
+SDK helpers select/rotate images locally; the face retains control of presentation.
 
 ## Integration boundary
 
@@ -130,6 +136,14 @@ updates are coalesced per affected display.
 Credentials are encrypted with a key in the same persistent volume. This limits
 database-only disclosure, not full-volume compromise. API DTOs/logging exclude
 secrets. Display readings remain publicly readable to anyone reaching the server.
+
+Mounted-folder connections scan only below the configured photo root. They skip
+hidden entries and symlinks, use bounded scans, and periodically refresh selected
+collections. Image access is granted per saved display binding or explicit draft
+preview, expires after ten minutes, and is revalidated on every request.
+Server-side image decoding corrects orientation, strips metadata, and produces
+bounded JPEG variants cached in at most 32 MiB/128 entries of memory. Originals
+remain outside the data volume and are never modified.
 
 **Only trusted packages are supported.** Browser sandboxing cannot prevent every
 resource-exhaustion attack, browser vulnerability, or misleading visual design.

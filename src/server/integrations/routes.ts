@@ -7,6 +7,7 @@ import type { Store } from "../db.js";
 import { UserError } from "../faces.js";
 import type { Integrations } from "./manager.js";
 import { baseUrl } from "./network.js";
+import { folderSchema } from "./mounted-folder.js";
 
 const name = z.string().trim().min(1).max(80);
 const url = z.string().max(2048).transform(baseUrl);
@@ -15,7 +16,7 @@ const token = z
   .min(1)
   .max(4096)
   .regex(/^\S+$/, "Enter a token without whitespace.");
-const create = z
+const createHomeAssistant = z
   .object({
     type: z.literal("home-assistant"),
     name,
@@ -24,17 +25,33 @@ const create = z
     enabled: z.boolean().optional(),
   })
   .strict();
+const create = z.discriminatedUnion("type", [
+  createHomeAssistant,
+  z
+    .object({
+      type: z.literal("mounted-folder"),
+      name,
+      folder: folderSchema.default(""),
+      enabled: z.boolean().optional(),
+    })
+    .strict(),
+]);
 const edit = z
   .object({
     revision: z.number().int().positive(),
     name: name.optional(),
     baseUrl: url.optional(),
+    folder: folderSchema.optional(),
     token: token.optional(),
     enabled: z.boolean().optional(),
   })
   .strict();
 const test = z
-  .object({ baseUrl: url.optional(), token: token.optional() })
+  .object({
+    baseUrl: url.optional(),
+    token: token.optional(),
+    folder: folderSchema.optional(),
+  })
   .strict();
 const draft = z
   .object({ faceId: z.string().max(64), bindings: bindingsSchema })
@@ -73,9 +90,10 @@ export function integrationRoutes(
     if (store.integrations().length >= 10)
       throw new UserError("At most 10 integrations can be configured.");
     const id = randomUUID();
-    let credentials: string;
+    let credentials = "";
     try {
-      credentials = integrations.secrets.encrypt(input.token);
+      if (input.type === "home-assistant")
+        credentials = integrations.secrets.encrypt(input.token);
     } catch {
       throw new UserError(
         "Integration key is missing or invalid. Restore integration-key from your backup.",
@@ -90,7 +108,7 @@ export function integrationRoutes(
         id,
         input.type,
         input.name,
-        input.baseUrl,
+        input.type === "home-assistant" ? input.baseUrl : input.folder,
         credentials,
         input.enabled === false ? 0 : 1,
       );
@@ -106,6 +124,14 @@ export function integrationRoutes(
       const input = edit.parse(request.body);
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
+      if (
+        (row.type === "home-assistant" && input.folder !== undefined) ||
+        (row.type === "mounted-folder" &&
+          (input.baseUrl !== undefined || input.token !== undefined))
+      )
+        throw new UserError(
+          "These settings do not belong to this integration type.",
+        );
       if (input.revision !== row.revision)
         throw new UserError(
           "This integration changed elsewhere. Reload and try again.",
@@ -128,7 +154,7 @@ export function integrationRoutes(
         )
         .run(
           input.name ?? row.name,
-          input.baseUrl ?? row.base_url,
+          input.folder ?? input.baseUrl ?? row.base_url,
           credentials,
           input.enabled === undefined ? row.enabled : Number(input.enabled),
           row.id,
@@ -157,8 +183,22 @@ export function integrationRoutes(
     },
   );
   app.post("/api/integrations/test", limited, async (request) => {
+    if ((request.body as { type?: string })?.type === "mounted-folder") {
+      const input = z
+        .object({
+          type: z.literal("mounted-folder"),
+          folder: folderSchema.default(""),
+        })
+        .strict()
+        .parse(request.body);
+      return integrations.testFolder(input.folder);
+    }
     const input = z
-      .object({ baseUrl: url, token })
+      .object({
+        type: z.literal("home-assistant").optional(),
+        baseUrl: url,
+        token,
+      })
       .strict()
       .parse(request.body);
     return integrations.test(input.baseUrl, input.token);
@@ -170,6 +210,17 @@ export function integrationRoutes(
       const input = test.parse(request.body ?? {});
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
+      if (row.type === "mounted-folder") {
+        if (input.baseUrl !== undefined || input.token !== undefined)
+          throw new UserError("Mounted folders do not use a URL or token.");
+        const result = await integrations.testFolder(
+          input.folder ?? row.base_url,
+        );
+        if (input.folder === undefined) integrations.retry(row.id);
+        return result;
+      }
+      if (input.folder !== undefined)
+        throw new UserError("Home Assistant does not use a folder.");
       let credential = input.token;
       if (!credential) {
         try {
@@ -208,7 +259,7 @@ export function integrationRoutes(
           offset: z.coerce.number().int().min(0).max(10000).default(0),
           limit: z.coerce.number().int().min(1).max(500).default(100),
           refresh: z.enum(["true", "false"]).optional(),
-          type: z.enum(["number", "boolean", "text"]).optional(),
+          type: z.enum(["number", "boolean", "text", "image"]).optional(),
           quantity: z.enum(["temperature", "humidity"]).optional(),
         })
         .strict()
@@ -258,6 +309,7 @@ export function integrationRoutes(
             face.manifest,
             bindings,
             controller.signal,
+            { deviceId: device.id, revision: device.revision, preview: true },
           ),
         };
       } finally {

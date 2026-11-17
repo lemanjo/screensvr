@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 3,
+  "id": "builtin-photos",
+  "version": "1.0.0",
+  "name": "Photo Hours",
+  "description": "Your photos, with a quiet clock. Choose a mounted folder or a single image under Data sources.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "inputs": [
+    {
+      "key": "photos",
+      "label": "Photos",
+      "description": "A folder slideshow or one favorite image.",
+      "type": "image"
+    }
+  ],
+  "settings": [
+    {
+      "key": "interval",
+      "label": "Seconds between photos",
+      "type": "number",
+      "default": 30,
+      "min": 5,
+      "max": 3600,
+      "step": 1
+    },
+    {
+      "key": "shuffle",
+      "label": "Shuffle photos",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "fit",
+      "label": "Photo fit",
+      "type": "select",
+      "default": "cover",
+      "options": [
+        { "label": "Fill screen", "value": "cover" },
+        { "label": "Show whole photo", "value": "contain" }
+      ]
+    },
+    {
+      "key": "showClock",
+      "label": "Show clock",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "format",
+      "label": "Clock format",
+      "type": "select",
+      "default": "24",
+      "options": [
+        { "label": "24 hour", "value": "24" },
+        { "label": "12 hour", "value": "12" }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,8 @@ services:
       - "3000:3000"
     volumes:
       - screensvr-data:/data
+      # Optional: mount a host/NAS photo directory read-only.
+      # - /mnt/nas/photos/screensvr:/photos:ro
     restart: unless-stopped
     init: true
     security_opt:

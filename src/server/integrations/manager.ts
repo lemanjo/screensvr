@@ -7,11 +7,14 @@ import {
   type Bindings,
   type FaceData,
   type Integration,
+  type PhotoValue,
   type Source,
 } from "../../shared/face-data.js";
 import type { IntegrationRow, Store } from "../db.js";
 import { UserError } from "../faces.js";
 import { Secrets } from "../integration-key.js";
+import { Photos, type PhotoScope } from "../photos.js";
+import { MountedFolder } from "./mounted-folder.js";
 import {
   ConnectorError,
   HomeAssistant,
@@ -43,6 +46,7 @@ type Runtime = {
 
 export class Integrations {
   readonly secrets: Secrets;
+  readonly photos: Photos;
   private runtimes = new Map<string, Runtime>();
   private closed = false;
   private previewCount = 0;
@@ -52,8 +56,16 @@ export class Integrations {
     directory: string,
     private changed: (id: string) => void,
     private connect: ConnectorFactory = HomeAssistant.connect,
+    private photosDirectory = "/photos",
   ) {
-    this.secrets = new Secrets(directory, store.integrations().length > 0);
+    this.secrets = new Secrets(
+      directory,
+      store.integrations().some((row) => Boolean(row.credentials)),
+    );
+    this.photos = new Photos(store, (id) => {
+      const client = this.runtimes.get(id)?.client;
+      return client instanceof MountedFolder ? client : undefined;
+    });
   }
   private current(id: string, runtime: Runtime) {
     return !this.closed && this.runtimes.get(id) === runtime;
@@ -98,7 +110,10 @@ export class Integrations {
     this.changed(row.id);
     let token: string;
     try {
-      token = this.secrets.decrypt(row.credentials);
+      token =
+        row.type === "home-assistant"
+          ? this.secrets.decrypt(row.credentials)
+          : "";
     } catch (error) {
       runtime.status = "error";
       runtime.error = (error as Error).message;
@@ -106,15 +121,19 @@ export class Integrations {
       return;
     }
     try {
-      const client = await this.connect(
-        row.base_url,
-        token,
-        (error) => {
-          if (runtime.connectionGeneration === generation)
-            this.failed(row, runtime, error);
-        },
-        runtime.abort.signal,
-      );
+      const client =
+        row.type === "mounted-folder"
+          ? new MountedFolder(this.photosDirectory, row.base_url)
+          : await this.connect(
+              row.base_url,
+              token,
+              (error) => {
+                if (runtime.connectionGeneration === generation)
+                  this.failed(row, runtime, error);
+              },
+              runtime.abort.signal,
+            );
+      if (client instanceof MountedFolder) await client.confirm();
       if (
         !this.current(row.id, runtime) ||
         runtime.connectionGeneration !== generation
@@ -148,7 +167,7 @@ export class Integrations {
               this.failed(
                 row,
                 runtime,
-                new ConnectorError("Home Assistant health check failed."),
+                new ConnectorError("Integration health check failed."),
               );
           })
           .finally(() => {
@@ -164,7 +183,7 @@ export class Integrations {
           runtime,
           error instanceof ConnectorError
             ? error
-            : new ConnectorError("Cannot connect to Home Assistant."),
+            : new ConnectorError("Cannot connect to the integration."),
         );
     }
   }
@@ -261,9 +280,10 @@ export class Integrations {
       const runtime = this.runtimes.get(row.id);
       return {
         id: row.id,
-        type: row.type,
         name: row.name,
-        baseUrl: row.base_url,
+        ...(row.type === "home-assistant"
+          ? { type: "home-assistant" as const, baseUrl: row.base_url }
+          : { type: "mounted-folder" as const, folder: row.base_url }),
         enabled: Boolean(row.enabled),
         revision: row.revision,
         hasCredentials: Boolean(row.credentials),
@@ -281,7 +301,7 @@ export class Integrations {
     const runtime = this.runtimes.get(id);
     if (!runtime?.client || runtime.status !== "connected")
       throw new UserError(
-        runtime?.error ?? "Home Assistant is connecting. Try again shortly.",
+        runtime?.error ?? "Integration is connecting. Try again shortly.",
         503,
       );
     return runtime;
@@ -319,7 +339,7 @@ export class Integrations {
       .catch((error) => {
         if (error instanceof UserError) throw error;
         throw new UserError(
-          "Could not read Home Assistant sources. Check connection, permissions, and entity limits.",
+          "Could not read integration sources. Check the connection, permissions, and source limits.",
           502,
         );
       })
@@ -337,7 +357,7 @@ export class Integrations {
     deviceId?: string,
   ) {
     const bindings = bindingsSchema.parse(input);
-    const inputs = manifest.schemaVersion === 2 ? manifest.inputs : [];
+    const inputs = manifest.schemaVersion !== 1 ? manifest.inputs : [];
     const discovery = new Map<string, Promise<Source[]>>();
     for (const [key, binding] of Object.entries(bindings)) {
       const faceInput = inputs.find((item) => item.key === key);
@@ -392,8 +412,9 @@ export class Integrations {
     manifest: FaceManifest,
     bindings: Bindings,
     overrides?: Map<string, Map<string, Reading>>,
+    scope?: PhotoScope,
   ): FaceData {
-    const inputs = manifest.schemaVersion === 2 ? manifest.inputs : [];
+    const inputs = manifest.schemaVersion !== 1 ? manifest.inputs : [];
     return faceDataSchema.parse(
       Object.fromEntries(
         inputs.map((input) => {
@@ -421,6 +442,13 @@ export class Integrations {
           if (!compatible(input, value.source))
             return [input.key, emptyDatum(input, "unavailable")];
           const reading = { ...value.reading };
+          if (reading.type === "image" && reading.value && scope)
+            reading.value = this.photos.grant(
+              reading.value as PhotoValue,
+              binding,
+              input.key,
+              scope,
+            );
           if (
             reading.status === "ready" &&
             (runtime?.status !== "connected" ||
@@ -436,6 +464,7 @@ export class Integrations {
     manifest: FaceManifest,
     bindings: Bindings,
     signal?: AbortSignal,
+    scope?: PhotoScope,
   ) {
     if (this.previewCount >= 4)
       throw new UserError("Too many previews. Try again shortly.", 429);
@@ -472,11 +501,11 @@ export class Integrations {
             throw new UserError("Integration changed. Try again.", 409);
         }),
       );
-      return this.data(manifest, bindings, overrides);
+      return this.data(manifest, bindings, overrides, scope);
     } catch (error) {
       if (error instanceof UserError) throw error;
       throw new UserError(
-        "Could not preview these sources. Check the Home Assistant connection.",
+        "Could not preview these sources. Check the integration connection.",
         502,
       );
     } finally {
@@ -511,6 +540,30 @@ export class Integrations {
       this.operations.delete(abort);
     }
   }
+  async testFolder(folder: string) {
+    if (this.operations.size >= 4)
+      throw new UserError("Too many connection tests. Try again shortly.", 429);
+    const operation = new AbortController();
+    this.operations.add(operation);
+    const client = new MountedFolder(this.photosDirectory, folder);
+    operation.signal.addEventListener("abort", () => client.close(), {
+      once: true,
+    });
+    try {
+      await client.confirm();
+      return { ok: true };
+    } catch (error) {
+      throw new UserError(
+        error instanceof ConnectorError
+          ? error.message
+          : "Cannot read the photo folder.",
+        502,
+      );
+    } finally {
+      client.close();
+      this.operations.delete(operation);
+    }
+  }
   retry(id: string) {
     const runtime = this.runtimes.get(id);
     if (
@@ -535,5 +588,6 @@ export class Integrations {
     for (const runtime of this.runtimes.values()) this.stop(runtime);
     for (const operation of this.operations) operation.abort();
     this.runtimes.clear();
+    this.photos.close();
   }
 }

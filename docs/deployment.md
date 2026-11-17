@@ -78,6 +78,7 @@ rejected rather than silently downgraded.
 | `HOST`                     | `0.0.0.0`                                     | HTTP bind address                                                           |
 | `PORT`                     | `3000`                                        | HTTP port                                                                   |
 | `SCREENSVR_DATA_DIR`       | `./data` (`/data` in Docker)                  | Persistent storage                                                          |
+| `SCREENSVR_PHOTOS_DIR`     | `/photos`                                     | Optional mounted-photo root; mount NAS/local photos read-only here          |
 | `SCREENSVR_ORIGIN`         | Request origin derived from protocol and Host | Explicit public origin for mutation checks                                  |
 | `SCREENSVR_SECURE_COOKIES` | `false`                                       | Set `true` when served over HTTPS                                           |
 | `SCREENSVR_TRUST_PROXY`    | `false`                                       | Trust forwarded headers; only behind an exclusively reachable trusted proxy |

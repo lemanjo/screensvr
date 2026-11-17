@@ -25,7 +25,7 @@ export function FaceFrame(props: Props) {
     port.current?.postMessage({
       type: "update",
       config: settings,
-      ...(protocol.current === 2 ? { data: frameData(face, data) } : {}),
+      ...(protocol.current >= 2 ? { data: frameData(face, data) } : {}),
       context: {
         timezone,
         name: name ?? "Preview",
@@ -47,10 +47,12 @@ export function FaceFrame(props: Props) {
         clearTimeout(timeout.current);
         const version = data.protocolVersion ?? 1;
         if (
-          ![1, 2].includes(version) ||
-          (latest.current.face.schemaVersion === 2 && version !== 2)
+          ![1, 2, 3].includes(version) ||
+          version < latest.current.face.schemaVersion
         ) {
-          setError("This face requires the data-capable SDK (protocol v2).");
+          setError(
+            `This face requires SDK protocol v${latest.current.face.schemaVersion} or newer.`,
+          );
           return;
         }
         protocol.current = version;
@@ -60,7 +62,7 @@ export function FaceFrame(props: Props) {
       if (data?.type === "error") setError("This face encountered an error.");
     };
     frame.current?.contentWindow?.postMessage(
-      { type: "screensvr:connect", protocols: [2, 1] },
+      { type: "screensvr:connect", protocols: [3, 2, 1] },
       "*",
       [channel.port2],
     );

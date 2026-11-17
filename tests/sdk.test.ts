@@ -12,6 +12,7 @@ const source = readFileSync(
   "utf8",
 );
 type Update = { config: Record<string, unknown>; data: FaceData };
+type Photo = { url: string; index: number; count: number; revision: string };
 function sdk(protocols?: number[]) {
   const parent = {};
   const windowEvents = new Map<string, (event: unknown) => void>();
@@ -21,6 +22,17 @@ function sdk(protocols?: number[]) {
       windowEvents.set(name, callback),
     screensvr: undefined as unknown as {
       onUpdate: (callback: (update: Update) => void) => () => void;
+      photos: {
+        get: (
+          key: string,
+          options?: { index?: number; width?: number; height?: number },
+        ) => Photo | null;
+        watch: (
+          key: string,
+          callback: (photo: Photo | null) => void,
+          options?: { interval?: number; shuffle?: boolean },
+        ) => () => void;
+      };
     },
   };
   const document = {
@@ -166,4 +178,112 @@ it("orders data snapshots independently of configuration revision and adopts res
   expect(
     newerSnapshot(first, { ...first, epoch: "new", sequence: 1 }).epoch,
   ).toBe("new");
+});
+
+const photoData = (count = 3, revision = "a".repeat(64)): FaceData => ({
+  photos: {
+    type: "image",
+    status: "ready",
+    value: { count, revision, url: `/api/photos/${"x".repeat(32)}` },
+    unit: null,
+    updatedAt: 0,
+    observedAt: 0,
+    expiresAt: Date.now() + 90000,
+  },
+});
+it("negotiates v3 and exposes bounded image URLs without network or provider access", () => {
+  const client = sdk([3, 2, 1]);
+  client.connect();
+  expect(client.port.postMessage).toHaveBeenCalledWith({
+    type: "ready",
+    protocolVersion: 3,
+  });
+  expect(client.window.screensvr.photos.get("photos")).toBeNull();
+  client.send(photoData());
+  const photo = client.window.screensvr.photos.get("photos", {
+    index: 2,
+    width: 10000,
+    height: 500,
+  })!;
+  expect(photo.index).toBe(2);
+  expect(photo.count).toBe(3);
+  expect(photo.url).toContain("?index=2&width=2560&height=500&v=");
+  expect(Object.isFrozen(photo)).toBe(true);
+  for (const index of [-1, 3, 0.5, NaN])
+    expect(() =>
+      client.window.screensvr.photos.get("photos", { index }),
+    ).toThrow();
+  expect(() =>
+    client.window.screensvr.photos.get("photos", { width: Infinity }),
+  ).toThrow();
+});
+it("rotates photos without restarting on repeated updates, stops on stale data, and unsubscribes", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100000);
+  const client = sdk([3]);
+  client.connect();
+  client.send(photoData());
+  const callback = vi.fn();
+  const stop = client.window.screensvr.photos.watch("photos", callback, {
+    interval: 10000,
+  });
+  expect(callback.mock.lastCall![0].index).toBe(0);
+  vi.advanceTimersByTime(5000);
+  client.send(photoData());
+  vi.advanceTimersByTime(5000);
+  expect(callback.mock.lastCall![0].index).toBe(1);
+  vi.advanceTimersByTime(10000);
+  expect(callback.mock.lastCall![0].index).toBe(2);
+  const stale = photoData();
+  stale.photos.status = "stale";
+  client.send(stale);
+  const count = callback.mock.calls.length;
+  vi.advanceTimersByTime(20000);
+  expect(callback).toHaveBeenCalledTimes(count);
+  client.send(photoData(1, "b".repeat(64)));
+  expect(callback.mock.lastCall![0].index).toBe(0);
+  vi.advanceTimersByTime(20000);
+  expect(callback.mock.lastCall![0].index).toBe(0);
+  stop();
+  client.send(photoData());
+  expect(callback.mock.lastCall![0].count).toBe(1);
+});
+it("shuffles without immediate repeats, resets on collection changes, and clears unavailable photos", () => {
+  vi.useFakeTimers();
+  const client = sdk([3]);
+  client.connect();
+  client.send(photoData());
+  const callback = vi.fn();
+  const stop = client.window.screensvr.photos.watch("photos", callback, {
+    interval: 1000,
+    shuffle: true,
+  });
+  for (let i = 0; i < 5; i++) {
+    const previous = callback.mock.lastCall![0].index;
+    vi.advanceTimersByTime(1000);
+    expect(callback.mock.lastCall![0].index).not.toBe(previous);
+  }
+  const unavailable = photoData();
+  unavailable.photos.status = "unavailable";
+  unavailable.photos.value = null;
+  client.send(unavailable);
+  expect(callback.mock.lastCall![0]).toBeNull();
+  expect(client.window.screensvr.photos.get("photos")).toBeNull();
+  stop();
+});
+it("bounds v3 frame descriptors to public fields and rejects external image URLs", () => {
+  const face = {
+    ...testManifest,
+    schemaVersion: 3 as const,
+    inputs: [{ key: "photos", label: "Photos", type: "image" as const }],
+  };
+  const data = photoData();
+  expect(frameData(face, data).photos.status).toBe("ready");
+  const value = data.photos.value as {
+    count: number;
+    revision: string;
+    url: string;
+  };
+  data.photos.value = { ...value, url: "https://example.com/private.jpg" };
+  expect(frameData(face, data).photos.status).toBe("unavailable");
 });
