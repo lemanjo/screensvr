@@ -3,6 +3,7 @@ import type { SceneConfiguration } from "./scenes.js";
 import {
   inputSchema,
   scalarInputSchema,
+  weatherInputSchema,
   type Bindings,
   type FaceData,
 } from "./face-data.js";
@@ -80,6 +81,13 @@ export const manifestSchema = z
         ...manifestFields,
         schemaVersion: z.literal(3),
         inputs: z.array(inputSchema).max(16),
+      })
+      .strict(),
+    z
+      .object({
+        ...manifestFields,
+        schemaVersion: z.literal(4),
+        inputs: z.array(weatherInputSchema).max(16),
       })
       .strict(),
   ])

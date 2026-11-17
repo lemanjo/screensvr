@@ -155,6 +155,11 @@ readings and notifies faces of stale status during network loss/sleep.
 Manifest v3/protocol v3 adds image inputs. The host projects a collection count,
 revision, and opaque scoped URL instead of copying the file list into snapshots.
 SDK helpers select/rotate images locally; the face retains control of presentation.
+Manifest v4/protocol v4 adds structured current-weather and daily/hourly forecast
+inputs, independently selected and independently fresh. Earlier manifest schemas
+remain unchanged. The host validates and projects nested weather fields rather
+than forwarding arbitrary provider objects; the dependency-free display bundle
+does not import server schemas or provider code.
 
 ## Integration boundary
 
@@ -171,6 +176,22 @@ values to change. Disconnections retain stale readings, while unavailable or
 removed entities clear values. Reconnection requires a fresh selected snapshot.
 Generation guards ignore replaced connections/subscriptions, and high-rate
 updates are coalesced per affected display.
+
+Weather states use the same filtered entity stream, retaining only selected
+temperature/unit/capability metadata. Forecasts use separate read-only
+`weather/subscribe_forecast` subscriptions, never service calls or deprecated
+forecast attributes. Subscriptions are reference-counted across live bindings
+and overlapping previews, with four concurrent initial forecast reads. Last
+consumer removal cancels work, drops cached values, and stops refreshes.
+Daily/hourly errors remain source-local and do not disconnect working sensors.
+
+Forecasts are re-confirmed every 15 minutes. Each successful payload has a
+one-hour maximum confirmation age in addition to the 90-second transport lease;
+heartbeat renewal cannot bypass that ceiling or invent a newer observation
+timestamp. Missing/empty forecasts clear values, transient read failures retain
+stale values, and reconnection requires a new forecast response. Home Assistant
+does not supply forecast issuance time, so it remains unknown. Normalized
+forecasts retain at most seven daily or 24 hourly entries in memory.
 
 Credentials are encrypted with a key in the same persistent volume. This limits
 database-only disclosure, not full-volume compromise. API DTOs/logging exclude

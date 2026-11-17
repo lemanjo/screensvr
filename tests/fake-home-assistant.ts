@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import { WebSocketServer, WebSocket } from "ws";
+import type { ForecastPeriod } from "../src/shared/weather.js";
 
 export const fakeToken = "fake-home-assistant-token-for-tests-only";
 type Entity = {
@@ -14,11 +15,23 @@ export class FakeHomeAssistant {
     path: "/api/websocket",
   });
   private subscriptions = new Map<WebSocket, Map<number, string[]>>();
+  private forecastSubscriptions = new Map<
+    WebSocket,
+    Map<number, { entityId: string; period: ForecastPeriod }>
+  >();
   readonly entities = new Map<string, Entity>();
-  readonly commands: { type: string; entity_ids?: string[] }[] = [];
+  readonly forecasts = new Map<string, unknown>();
+  readonly commands: {
+    type: string;
+    entity_ids?: string[];
+    entity_id?: string;
+    forecast_type?: ForecastPeriod;
+  }[] = [];
   rejectAuthentication = false;
   rejectSubscriptions = false;
   unfiltered = false;
+  rejectForecasts = false;
+  silentForecasts = false;
   connections = 0;
   url = "";
   static async start() {
@@ -52,11 +65,40 @@ export class FakeHomeAssistant {
     this.set("sensor.secret", "DO NOT EXPOSE THIS SENSOR", {
       friendly_name: "Private sensor",
     });
+    this.set("weather.home", "rainy", {
+      friendly_name: "Home weather",
+      temperature: 12.5,
+      temperature_unit: "°C",
+      supported_features: 3,
+      private_attribute: "DO NOT EXPOSE THIS WEATHER ATTRIBUTE",
+    });
+    for (const period of ["daily", "hourly"] as const)
+      this.setForecast(
+        "weather.home",
+        period,
+        Array.from({ length: period === "daily" ? 7 : 24 }, (_, index) => ({
+          datetime: new Date(
+            Date.now() + index * (period === "daily" ? 86400000 : 3600000),
+          ).toISOString(),
+          condition: index % 2 ? "cloudy" : "rainy",
+          temperature: 14 + index,
+          ...(period === "daily" ? { templow: 7 + index } : {}),
+          private_attribute: "DO NOT EXPOSE FORECAST METADATA",
+        })),
+      );
     this.server.on("connection", (socket) => {
       this.connections++;
       const subscriptions = new Map<number, string[]>();
       this.subscriptions.set(socket, subscriptions);
-      socket.on("close", () => this.subscriptions.delete(socket));
+      const forecasts = new Map<
+        number,
+        { entityId: string; period: ForecastPeriod }
+      >();
+      this.forecastSubscriptions.set(socket, forecasts);
+      socket.on("close", () => {
+        this.subscriptions.delete(socket);
+        this.forecastSubscriptions.delete(socket);
+      });
       socket.send(
         JSON.stringify({ type: "auth_required", ha_version: "2024.1.0" }),
       );
@@ -88,6 +130,10 @@ export class FakeHomeAssistant {
         this.commands.push({
           type: message.type,
           ...(message.entity_ids ? { entity_ids: message.entity_ids } : {}),
+          ...(message.entity_id ? { entity_id: message.entity_id } : {}),
+          ...(message.forecast_type
+            ? { forecast_type: message.forecast_type }
+            : {}),
         });
         if (message.type === "ping")
           socket.send(JSON.stringify({ id: message.id, type: "pong" }));
@@ -127,8 +173,33 @@ export class FakeHomeAssistant {
               },
             }),
           );
+        } else if (message.type === "weather/subscribe_forecast") {
+          if (this.rejectForecasts) {
+            result(null, false);
+            return;
+          }
+          forecasts.set(message.id, {
+            entityId: message.entity_id,
+            period: message.forecast_type,
+          });
+          result();
+          if (!this.silentForecasts)
+            socket.send(
+              JSON.stringify({
+                id: message.id,
+                type: "event",
+                event: {
+                  type: message.forecast_type,
+                  forecast:
+                    this.forecasts.get(
+                      `${message.entity_id}:${message.forecast_type}`,
+                    ) ?? null,
+                },
+              }),
+            );
         } else if (message.type === "unsubscribe_events") {
           subscriptions.delete(message.subscription);
+          forecasts.delete(message.subscription);
           result();
         } else result(null, false);
       });
@@ -158,6 +229,29 @@ export class FakeHomeAssistant {
     if (!entity) throw new Error("Unknown fixture entity.");
     delete entity.attributes[key];
     this.send(id, { c: { [id]: { "-": { a: [key] } } } });
+  }
+  setForecast(entityId: string, period: ForecastPeriod, forecast: unknown) {
+    this.forecasts.set(`${entityId}:${period}`, forecast);
+    for (const [socket, subscriptions] of this.forecastSubscriptions)
+      for (const [id, selected] of subscriptions)
+        if (
+          selected.entityId === entityId &&
+          selected.period === period &&
+          socket.readyState === WebSocket.OPEN
+        )
+          socket.send(
+            JSON.stringify({
+              id,
+              type: "event",
+              event: { type: period, forecast },
+            }),
+          );
+  }
+  get activeForecasts() {
+    return [...this.forecastSubscriptions.values()].reduce(
+      (count, subscriptions) => count + subscriptions.size,
+      0,
+    );
   }
   remove(id: string) {
     this.entities.delete(id);

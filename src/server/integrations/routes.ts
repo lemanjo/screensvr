@@ -290,8 +290,11 @@ export function integrationRoutes(
           offset: z.coerce.number().int().min(0).max(10000).default(0),
           limit: z.coerce.number().int().min(1).max(500).default(100),
           refresh: z.enum(["true", "false"]).optional(),
-          type: z.enum(["number", "boolean", "text", "image"]).optional(),
+          type: z
+            .enum(["number", "boolean", "text", "image", "weather", "forecast"])
+            .optional(),
           quantity: z.enum(["temperature", "humidity"]).optional(),
+          period: z.enum(["daily", "hourly"]).optional(),
         })
         .strict()
         .parse(request.query);
@@ -303,7 +306,8 @@ export function integrationRoutes(
             .toLowerCase()
             .includes(query.q.toLowerCase()) &&
           (!query.type || item.type === query.type) &&
-          (!query.quantity || item.quantity === query.quantity),
+          (!query.quantity || item.quantity === query.quantity) &&
+          (!query.period || item.period === query.period),
       );
       return {
         sources: sources.slice(query.offset, query.offset + query.limit),

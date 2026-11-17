@@ -287,3 +287,47 @@ it("bounds v3 frame descriptors to public fields and rejects external image URLs
   data.photos.value = { ...value, url: "https://example.com/private.jpg" };
   expect(frameData(face, data).photos.status).toBe("unavailable");
 });
+it("negotiates v4, freezes structured weather and expires forecasts independently", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100000);
+  const client = sdk([4, 3, 2, 1]);
+  client.connect();
+  expect(client.port.postMessage).toHaveBeenCalledWith({
+    type: "ready",
+    protocolVersion: 4,
+  });
+  const listener = vi.fn();
+  client.window.screensvr.onUpdate(listener);
+  client.send({
+    weather: {
+      type: "weather",
+      status: "ready",
+      value: { temperature: 0, condition: "snow" },
+      unit: "°C",
+      updatedAt: null,
+      observedAt: 100000,
+      expiresAt: 190000,
+    },
+    daily: {
+      type: "forecast",
+      period: "daily",
+      status: "ready",
+      value: {
+        entries: [{ at: 100000, temperature: 1, low: -3, condition: "snow" }],
+      },
+      unit: "°C",
+      updatedAt: null,
+      observedAt: 100000,
+      expiresAt: 130000,
+    },
+  });
+  expect(
+    Object.isFrozen(listener.mock.lastCall![0].data.daily.value.entries[0]),
+  ).toBe(true);
+  vi.advanceTimersByTime(30000);
+  expect(listener.mock.lastCall![0].data.daily.status).toBe("stale");
+  expect(listener.mock.lastCall![0].data.weather.status).toBe("ready");
+  vi.setSystemTime(200000);
+  client.documentEvents.get("visibilitychange")!();
+  expect(listener.mock.lastCall![0].data.weather.status).toBe("stale");
+});

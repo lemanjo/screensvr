@@ -182,7 +182,8 @@ matching application version. Test restoration before relying on a backup.
   directory below `/data/faces`. They are not served. After stopping the server
   and checking the database, an operator may remove only those known orphan
   directories. Do not delete referenced face directories.
-- Home Assistant sensor readings are supported through server-side
+- Home Assistant sensor readings, current weather, and daily/hourly forecasts
+  are supported through server-side
   [integrations](integrations.md). Its URL must be reachable from the container.
   Weekly time-based scheduling is supported per display. Registry downloads,
   multi-user permissions, and offline startup are not implemented.

@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 4,
+  "id": "builtin-weather",
+  "version": "1.0.0",
+  "name": "Weather Hours",
+  "description": "A quiet clock, the weather outside, and a little movement in the sky. Subtle rain, drifting snow, and soft clouds follow current conditions.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "inputs": [
+    {
+      "key": "weather",
+      "label": "Current weather",
+      "type": "weather",
+      "description": "Current temperature and condition. Only fresh conditions animate the background."
+    },
+    {
+      "key": "daily",
+      "label": "Daily forecast",
+      "type": "forecast",
+      "period": "daily",
+      "description": "Optional daily conditions and high/low temperatures, shown for up to three days."
+    },
+    {
+      "key": "hourly",
+      "label": "Hourly forecast",
+      "type": "forecast",
+      "period": "hourly",
+      "description": "Optional hourly conditions and temperatures, shown for up to six hours."
+    }
+  ],
+  "settings": [
+    {
+      "key": "background",
+      "label": "Background",
+      "type": "color",
+      "default": "#10191e"
+    },
+    {
+      "key": "text",
+      "label": "Clock and text",
+      "type": "color",
+      "default": "#e1e5df"
+    },
+    {
+      "key": "accent",
+      "label": "Weather accent",
+      "type": "color",
+      "default": "#a3b9b5"
+    },
+    {
+      "key": "location",
+      "label": "Weather label",
+      "type": "text",
+      "default": "Outside"
+    },
+    {
+      "key": "format",
+      "label": "Time format",
+      "type": "select",
+      "default": "24",
+      "options": [
+        { "label": "24 hour", "value": "24" },
+        { "label": "12 hour", "value": "12" }
+      ]
+    },
+    {
+      "key": "showDate",
+      "label": "Show date",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "forecast",
+      "label": "Forecast view",
+      "type": "select",
+      "default": "daily",
+      "options": [
+        { "label": "Next three days", "value": "daily" },
+        { "label": "Next six hours", "value": "hourly" },
+        { "label": "Hidden", "value": "off" }
+      ]
+    },
+    {
+      "key": "motion",
+      "label": "Weather animation",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}

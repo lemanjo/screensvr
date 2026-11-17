@@ -204,6 +204,90 @@ The SDK owns selection/playback helpers, not the layout. Faces control fit,
 crop, overlays, and transitions. No large library array or image bytes travel
 through the message bridge.
 
+## Manifest v4: weather
+
+Use `"schemaVersion": 4` for provider-independent structured weather. It includes
+v3's scalar/image inputs and adds these optional inputs:
+
+```json
+{
+  "inputs": [
+    { "key": "weather", "label": "Current weather", "type": "weather" },
+    {
+      "key": "daily",
+      "label": "Daily forecast",
+      "type": "forecast",
+      "period": "daily"
+    },
+    {
+      "key": "hourly",
+      "label": "Hourly forecast",
+      "type": "forecast",
+      "period": "hourly"
+    }
+  ]
+}
+```
+
+This is a manifest fragment. Each input is explicitly bound by an administrator.
+The three sources are independent: a missing forecast must not prevent a face
+from showing valid current conditions. Existing v1–v3 manifests remain strict;
+they do not accept weather inputs.
+
+A ready/stale `weather` datum has a value such as:
+
+```json
+{ "temperature": 12.5, "condition": "rain" }
+```
+
+Its top-level `unit` is the supplied temperature unit (°C, °F, or K), or `null`
+when unknown. Either value field may be `null`; at least one must be present.
+Do not substitute zero, assume a unit, or infer a condition from a temperature.
+
+A `forecast` datum also includes top-level `period: "daily"` or `"hourly"`.
+Its ready/stale value is:
+
+```json
+{
+  "entries": [
+    {
+      "at": 1794960000000,
+      "condition": "rain",
+      "temperature": 15,
+      "low": 7
+    }
+  ]
+}
+```
+
+Entries are ordered, unique timestamps in Unix milliseconds, with at most seven
+daily or 24 hourly entries. `temperature` is the supplied daily high or hourly
+temperature; `low` is a supplied daily low and is always `null` for hourly data.
+Temperature/low/condition may be `null`; an entry must contain at least one
+usable field. An empty forecast uses unavailable status with a `null` value.
+Numbers use the datum's temperature unit; no conversion or aggregation occurs.
+
+Conditions are normalized codes, not provider-specific labels:
+`clear-day`, `clear-night`, `partly-cloudy`, `cloudy`, `rain`, `heavy-rain`, `snow`,
+`sleet`, `hail`, `fog`, `wind`, `windy-cloudy`, `thunderstorm`, and
+`thunderstorm-rain`. Unrecognized provider conditions become `null`.
+Faces choose their own labels, icons, layout, and animation.
+
+Read these inputs through the ordinary SDK `onUpdate` data map. Weather uses the
+existing status/freshness fields and local expiry. Forecast `updatedAt` is `null`
+because Home Assistant does not supply an issuance timestamp; `observedAt`
+records the last forecast response, not the forecasted time or provider's
+generation time. Connection pings cannot renew that response age indefinitely.
+
+Format and select entries using `context.timezone`. Retain today's daily entry
+even if its timestamp is before the current hour, discard past daily dates on
+rollover, and update time-dependent presentation locally without waiting for a
+host message. Account for DST rather than assuming every day lasts 24 hours.
+Clearly label retained stale values, and do not animate stale/unknown conditions
+as if they describe current weather. The bundled
+[Weather Hours](../faces/builtin-weather/) face demonstrates this without any
+provider API, network access, or external animation assets.
+
 ## SDK
 
 Load the host-provided SDK **before** your own script:
@@ -248,7 +332,7 @@ Every declared input has an entry, containing `type`, optional `quantity`,
 | ------------- | ---------------------------------------------- | -------------------------------- |
 | `unbound`     | No selected source                             | `null`                           |
 | `loading`     | Waiting for an initial reading                 | `null`                           |
-| `ready`       | Valid, confirmed reading                       | Number, boolean, or short string |
+| `ready`       | Valid, confirmed reading                       | Typed scalar or structured value |
 | `unavailable` | Missing/invalid source or disabled integration | `null`                           |
 | `stale`       | Last valid reading can no longer be confirmed  | Last valid typed value           |
 
@@ -272,9 +356,10 @@ The transport is a MessageChannel transferred by the shell on iframe load.
 The SDK accepts the connection only from `parent`, replies `ready`, and receives
 `update` messages. Successful callbacks reply `applied`; thrown errors report
 `error`. Prefer the SDK over coupling directly to this transport.
-The host advertises protocols 1/2/3 and the SDK acknowledges its selected version.
+The host advertises protocols 1/2/3/4 and the SDK acknowledges its selected version.
 Legacy SDKs without a version acknowledgment use protocol 1; manifest-v2 faces
-require protocol 2 or newer, and manifest-v3 faces require protocol 3.
+require protocol 2 or newer, manifest-v3 faces require protocol 3 or newer, and
+manifest-v4 faces require protocol 4.
 
 ## Frameworks and browser restrictions
 

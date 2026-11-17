@@ -156,10 +156,13 @@ export class Integrations {
             if (!this.current(row.id, runtime) || runtime.client !== client)
               return;
             const now = Date.now();
-            for (const { reading } of runtime.readings.values())
+            for (const { reading, validUntil } of runtime.readings.values())
               if (reading.status === "ready") {
-                reading.observedAt = now;
-                reading.expiresAt = now + 90000;
+                if (validUntil === undefined) reading.observedAt = now;
+                reading.expiresAt = Math.min(
+                  now + 90000,
+                  validUntil ?? Infinity,
+                );
               }
             runtime.attempts = 0;
             this.changed(row.id);
@@ -254,6 +257,18 @@ export class Integrations {
     const watch = runtime.client.watch(ids, (values) => {
       if (!this.current(id, runtime) || generation !== runtime.watchGeneration)
         return;
+      for (const [key, value] of values) {
+        const previous = runtime.readings.get(key);
+        if (
+          value.retainPrevious &&
+          value.reading.value === null &&
+          previous?.reading.value
+        )
+          values.set(key, {
+            ...previous,
+            reading: { ...previous.reading, status: "stale" },
+          });
+      }
       runtime.readings = values;
       runtime.initialized = true;
       this.changed(id);
