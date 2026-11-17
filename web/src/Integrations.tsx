@@ -18,7 +18,9 @@ function IntegrationEditor({
     integration?.type ?? "home-assistant",
   );
   const [baseUrl, setBaseUrl] = useState(
-    integration && integration.type !== "mounted-folder"
+    integration &&
+      integration.type !== "mounted-folder" &&
+      integration.type !== "ical"
       ? integration.baseUrl
       : "",
   );
@@ -26,11 +28,22 @@ function IntegrationEditor({
     integration?.type === "mounted-folder" ? integration.folder : "",
   );
   const [token, setToken] = useState("");
+  const [feedUrl, setFeedUrl] = useState("");
+  const [timezone, setTimezone] = useState(
+    integration?.type === "ical"
+      ? integration.timezone
+      : Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
   const [enabled, setEnabled] = useState(integration?.enabled ?? true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const provider = type === "immich" ? "Immich" : "Home Assistant";
+  const provider =
+    type === "ical"
+      ? "iCalendar"
+      : type === "immich"
+        ? "Immich"
+        : "Home Assistant";
   async function test() {
     setBusy(true);
     setError("");
@@ -44,9 +57,11 @@ function IntegrationEditor({
           method: "POST",
           body: JSON.stringify({
             ...(integration ? {} : { type }),
-            ...(type === "mounted-folder"
-              ? { folder }
-              : { baseUrl, ...(token ? { token: token.trim() } : {}) }),
+            ...(type === "ical"
+              ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
+              : type === "mounted-folder"
+                ? { folder }
+                : { baseUrl, ...(token ? { token: token.trim() } : {}) }),
           }),
         },
       );
@@ -72,9 +87,13 @@ function IntegrationEditor({
           body: JSON.stringify({
             ...(integration ? { revision: integration.revision } : { type }),
             name,
-            ...(type === "mounted-folder" ? { folder } : { baseUrl }),
+            ...(type === "ical"
+              ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
+              : type === "mounted-folder"
+                ? { folder }
+                : { baseUrl }),
             enabled,
-            ...(type !== "mounted-folder" && token
+            ...(type !== "mounted-folder" && type !== "ical" && token
               ? { token: token.trim() }
               : {}),
           }),
@@ -109,18 +128,22 @@ function IntegrationEditor({
               { value: "home-assistant", label: "Home Assistant" },
               { value: "mounted-folder", label: "Mounted photo folders" },
               { value: "immich", label: "Immich" },
+              { value: "ical", label: "iCalendar feed" },
             ]}
             onChange={(value) => {
               setType(value as Integration["type"]);
               setBaseUrl("");
               setToken("");
+              setFeedUrl("");
               setFolder("");
               setName(
                 value === "mounted-folder"
                   ? "Photo folders"
-                  : value === "immich"
-                    ? "Immich"
-                    : "Home Assistant",
+                  : value === "ical"
+                    ? "Calendar"
+                    : value === "immich"
+                      ? "Immich"
+                      : "Home Assistant",
               );
               setError("");
               setNotice("");
@@ -128,11 +151,13 @@ function IntegrationEditor({
           />
         )}
         <p>
-          {type === "mounted-folder"
-            ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
-            : type === "immich"
-              ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
-              : "Connect once, then choose which sensors each display receives. Faces never receive your access token."}
+          {type === "ical"
+            ? "Subscribe to one read-only calendar feed. Choose which displays receive it separately. The full subscription URL is a secret and stays encrypted on the server."
+            : type === "mounted-folder"
+              ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
+              : type === "immich"
+                ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
+                : "Connect once, then choose which sensors, weather entities, or calendars each display receives. Faces never receive your access token."}
         </p>
         <label>
           Connection name
@@ -143,7 +168,49 @@ function IntegrationEditor({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        {type === "mounted-folder" ? (
+        {type === "ical" ? (
+          <>
+            <label>
+              Subscription URL
+              <input
+                type="password"
+                required={!integration}
+                maxLength={2048}
+                autoComplete="new-password"
+                spellCheck={false}
+                value={feedUrl}
+                placeholder={
+                  integration
+                    ? "Leave blank to keep the saved URL"
+                    : "https://…/calendar.ics"
+                }
+                onChange={(event) => setFeedUrl(event.target.value)}
+              />
+            </label>
+            <small>
+              Use a direct .ics subscription URL, not a calendar web page.
+              webcal:// is accepted as HTTPS. Redirects are not followed.
+            </small>
+            {feedUrl.startsWith("http:") && (
+              <p className="integration-warning">
+                HTTP exposes the secret feed URL and events. Prefer HTTPS.
+              </p>
+            )}
+            <label>
+              Calendar timezone
+              <input
+                required
+                maxLength={100}
+                value={timezone}
+                onChange={(event) => setTimezone(event.target.value)}
+              />
+            </label>
+            <small>
+              IANA timezone, for example Europe/Helsinki. Used for floating
+              event times; explicit event timezones take precedence.
+            </small>
+          </>
+        ) : type === "mounted-folder" ? (
           <>
             <label>
               Folder inside photo directory
@@ -233,8 +300,10 @@ function IntegrationEditor({
             className="secondary"
             disabled={
               busy ||
-              (type !== "mounted-folder" &&
-                (!baseUrl || (!integration && !token)))
+              (type === "ical"
+                ? !timezone || (!integration && !feedUrl)
+                : type !== "mounted-folder" &&
+                  (!baseUrl || (!integration && !token)))
             }
             onClick={() => void test()}
           >
@@ -314,8 +383,8 @@ export function IntegrationsPage({
           <div>
             <h2>A connection to your home.</h2>
             <p>
-              Add Home Assistant, Immich, or mounted photo folders, then choose
-              a source in a display’s settings.
+              Add Home Assistant, an iCalendar feed, Immich, or mounted photo
+              folders, then choose a source in a display’s settings.
             </p>
             <button className="primary" onClick={() => setEditing(null)}>
               Add your first integration
@@ -335,11 +404,13 @@ export function IntegrationsPage({
               </span>
             </div>
             <p className="muted">
-              {integration.type === "home-assistant"
-                ? `Home Assistant · ${integration.baseUrl}`
-                : integration.type === "immich"
-                  ? `Immich · ${integration.baseUrl}`
-                  : `Mounted photos · ${integration.folder || "All folders"}`}
+              {integration.type === "ical"
+                ? `iCalendar · ${integration.timezone} · subscription URL hidden`
+                : integration.type === "home-assistant"
+                  ? `Home Assistant · ${integration.baseUrl}`
+                  : integration.type === "immich"
+                    ? `Immich · ${integration.baseUrl}`
+                    : `Mounted photos · ${integration.folder || "All folders"}`}
             </p>
             {integration.error && <p className="error">{integration.error}</p>}
             <div className="integration-usage">

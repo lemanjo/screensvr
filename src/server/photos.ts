@@ -1,6 +1,10 @@
 import { randomBytes } from "node:crypto";
 import sharp from "sharp";
-import type { Bindings, PhotoValue } from "../shared/face-data.js";
+import {
+  isCalendarBinding,
+  type SourceBinding,
+  type PhotoValue,
+} from "../shared/face-data.js";
 import type { Store } from "./db.js";
 import { UserError } from "./faces.js";
 import type { PhotoConnector } from "./integrations/connector.js";
@@ -16,7 +20,7 @@ type Grant = {
   key: string;
   scope: PhotoScope;
   inputKey: string;
-  binding: Bindings[string];
+  binding: SourceBinding;
   integrationRevision: number;
   expires: number;
 };
@@ -35,7 +39,7 @@ export class Photos {
   ) {}
   grant(
     value: PhotoValue,
-    binding: Bindings[string],
+    binding: SourceBinding,
     inputKey: string,
     scope: PhotoScope,
   ): PhotoValue {
@@ -86,7 +90,9 @@ export class Photos {
         grant.inputKey
       ];
       if (
-        binding?.integrationId !== grant.binding.integrationId ||
+        !binding ||
+        isCalendarBinding(binding) ||
+        binding.integrationId !== grant.binding.integrationId ||
         binding.sourceId !== grant.binding.sourceId
       )
         return;

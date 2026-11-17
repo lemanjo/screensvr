@@ -1,4 +1,9 @@
 import { once } from "node:events";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { ForecastPeriod } from "../src/shared/weather.js";
 
@@ -9,9 +14,11 @@ type Entity = {
   last_updated: string;
 };
 export class FakeHomeAssistant {
+  private http = createServer((request, response) =>
+    this.calendarRequest(request, response),
+  );
   private server = new WebSocketServer({
-    port: 0,
-    host: "127.0.0.1",
+    server: this.http,
     path: "/api/websocket",
   });
   private subscriptions = new Map<WebSocket, Map<number, string[]>>();
@@ -21,6 +28,9 @@ export class FakeHomeAssistant {
   >();
   readonly entities = new Map<string, Entity>();
   readonly forecasts = new Map<string, unknown>();
+  readonly calendars = new Map<string, unknown[]>();
+  readonly calendarRequests: string[] = [];
+  calendarStatus = 200;
   readonly commands: {
     type: string;
     entity_ids?: string[];
@@ -36,12 +46,54 @@ export class FakeHomeAssistant {
   url = "";
   static async start() {
     const fake = new FakeHomeAssistant();
-    await once(fake.server, "listening");
-    const address = fake.server.address();
+    fake.http.listen(0, "127.0.0.1");
+    await once(fake.http, "listening");
+    const address = fake.http.address();
     if (!address || typeof address === "string")
       throw new Error("Missing fixture address.");
     fake.url = `http://127.0.0.1:${address.port}`;
     return fake;
+  }
+  private calendarRequest(request: IncomingMessage, response: ServerResponse) {
+    this.calendarRequests.push(`${request.method} ${request.url}`);
+    if (
+      this.rejectAuthentication ||
+      request.headers.authorization !== `Bearer ${fakeToken}`
+    ) {
+      response.writeHead(401).end("A secret upstream error");
+      return;
+    }
+    if (request.method !== "GET") {
+      response.writeHead(405).end();
+      return;
+    }
+    const url = new URL(request.url!, "http://localhost");
+    response.setHeader("content-type", "application/json");
+    if (this.calendarStatus !== 200) {
+      response.writeHead(this.calendarStatus).end();
+      return;
+    }
+    if (url.pathname === "/api/calendars") {
+      response.end(
+        JSON.stringify(
+          [...this.calendars.keys()].map((entity_id) => ({
+            entity_id,
+            name: entity_id.replace("calendar.", ""),
+          })),
+        ),
+      );
+      return;
+    }
+    const id = decodeURIComponent(url.pathname.replace("/api/calendars/", ""));
+    if (
+      !url.searchParams.has("start") ||
+      !url.searchParams.has("end") ||
+      !this.calendars.has(id)
+    ) {
+      response.writeHead(400).end();
+      return;
+    }
+    response.end(JSON.stringify(this.calendars.get(id)));
   }
   private constructor() {
     this.set("sensor.living_room_temperature", "21.3", {
@@ -272,6 +324,9 @@ export class FakeHomeAssistant {
     this.disconnect();
     await new Promise<void>((resolve, reject) =>
       this.server.close((error) => (error ? reject(error) : resolve())),
+    );
+    await new Promise<void>((resolve, reject) =>
+      this.http.close((error) => (error ? reject(error) : resolve())),
     );
   }
 }

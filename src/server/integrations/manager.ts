@@ -1,6 +1,8 @@
 import type { FaceManifest } from "../../shared/contracts.js";
 import {
   bindingsSchema,
+  bindingSources,
+  isCalendarBinding,
   compatible,
   emptyDatum,
   faceDataSchema,
@@ -17,6 +19,8 @@ import { Photos, type PhotoScope } from "../photos.js";
 import { MountedFolder } from "./mounted-folder.js";
 import { Immich } from "./immich.js";
 import { HomeAssistant } from "./home-assistant.js";
+import { Calendars } from "./calendars.js";
+import { feedUrl, calendarTimezone } from "./calendar-http.js";
 import {
   ConnectorError,
   isPhotoConnector,
@@ -49,6 +53,7 @@ type Runtime = {
 export class Integrations {
   readonly secrets: Secrets;
   readonly photos: Photos;
+  readonly calendars: Calendars;
   private runtimes = new Map<string, Runtime>();
   private closed = false;
   private previewCount = 0;
@@ -68,12 +73,18 @@ export class Integrations {
       const client = this.runtimes.get(id)?.client;
       return isPhotoConnector(client) ? client : undefined;
     });
+    this.calendars = new Calendars(
+      store,
+      (value) => this.secrets.decrypt(value),
+      changed,
+    );
   }
   private current(id: string, runtime: Runtime) {
     return !this.closed && this.runtimes.get(id) === runtime;
   }
   reconcile() {
     if (this.closed) return;
+    this.calendars.reconcile();
     const rows = this.store.integrations();
     for (const [id, runtime] of this.runtimes) {
       const row = rows.find((item) => item.id === id);
@@ -123,6 +134,13 @@ export class Integrations {
       return;
     }
     try {
+      if (row.type === "ical") {
+        feedUrl(token);
+        calendarTimezone(row.base_url);
+        runtime.status = "connected";
+        this.changed(row.id);
+        return;
+      }
       const client =
         row.type === "mounted-folder"
           ? new MountedFolder(this.photosDirectory, row.base_url)
@@ -230,6 +248,7 @@ export class Integrations {
       ...new Set(
         this.store.activeBindings().flatMap(({ bindings }) =>
           Object.values(bindings)
+            .flatMap((binding) => (isCalendarBinding(binding) ? [] : [binding]))
             .filter((binding) => binding.integrationId === id)
             .map((binding) => binding.sourceId),
         ),
@@ -304,14 +323,19 @@ export class Integrations {
       return {
         id: row.id,
         name: row.name,
-        ...(row.type === "mounted-folder"
-          ? { type: "mounted-folder" as const, folder: row.base_url }
-          : { type: row.type, baseUrl: row.base_url }),
+        ...(row.type === "ical"
+          ? { type: "ical" as const, timezone: row.base_url }
+          : row.type === "mounted-folder"
+            ? { type: "mounted-folder" as const, folder: row.base_url }
+            : { type: row.type, baseUrl: row.base_url }),
         enabled: Boolean(row.enabled),
         revision: row.revision,
         hasCredentials: Boolean(row.credentials),
         status: runtime?.status ?? (row.enabled ? "connecting" : "disabled"),
         error: runtime?.error ?? null,
+        ...(row.type === "ical" && runtime?.status === "connected"
+          ? this.calendars.health(row.id)
+          : {}),
         usage: this.store.usage(row.id),
       };
     });
@@ -329,7 +353,32 @@ export class Integrations {
       );
     return runtime;
   }
-  async discover(id: string, refresh = false) {
+  async discover(id: string, refresh = false, calendar = false) {
+    const row = this.store.integration(id);
+    if (calendar || row?.type === "ical") {
+      if (!row?.enabled || !["ical", "home-assistant"].includes(row.type))
+        throw new UserError("Choose an enabled calendar integration.");
+      let sources: Source[];
+      try {
+        const abort = this.runtimes.get(id)?.abort.signal;
+        sources = await this.calendars.discover(
+          row,
+          AbortSignal.any([
+            AbortSignal.timeout(10000),
+            ...(abort ? [abort] : []),
+          ]),
+          refresh,
+        );
+      } catch {
+        throw new UserError(
+          "Could not read calendars. Check connection access and calendar availability.",
+          502,
+        );
+      }
+      if (this.store.integration(id)?.revision !== row.revision)
+        throw new UserError("Integration changed. Try again.", 409);
+      return sources;
+    }
     const runtime = this.runtime(id);
     if (
       !refresh &&
@@ -387,11 +436,48 @@ export class Integrations {
       const faceInput = inputs.find((item) => item.key === key);
       if (!faceInput)
         throw new UserError("This face does not declare that data input.");
+      if (isCalendarBinding(binding)) {
+        if (faceInput.type !== "calendar")
+          throw new UserError("Multiple calendars require a calendar input.");
+        const old = previous[key];
+        for (const source of binding.calendars) {
+          if (!this.store.integration(source.integrationId))
+            throw new UserError("Integration not found.", 404);
+          if (
+            old &&
+            isCalendarBinding(old) &&
+            old.calendars.some(
+              (item) =>
+                item.integrationId === source.integrationId &&
+                item.sourceId === source.sourceId,
+            )
+          )
+            continue;
+          const discoveryKey = `${source.integrationId}:calendar`;
+          if (!discovery.has(discoveryKey))
+            discovery.set(
+              discoveryKey,
+              this.discover(source.integrationId, false, true),
+            );
+          const available = (await discovery.get(discoveryKey)!).find(
+            (item) => item.id === source.sourceId,
+          );
+          if (!available || !compatible(faceInput, available))
+            throw new UserError(
+              `Choose a compatible calendar for ${faceInput.label}.`,
+            );
+        }
+        continue;
+      }
+      if (faceInput.type === "calendar")
+        throw new UserError("Choose calendars explicitly for this input.");
       if (!this.store.integration(binding.integrationId))
         throw new UserError("Integration not found.", 404);
       const old = previous[key];
       if (
-        old?.integrationId === binding.integrationId &&
+        old &&
+        !isCalendarBinding(old) &&
+        old.integrationId === binding.integrationId &&
         old.sourceId === binding.sourceId
       )
         continue;
@@ -413,15 +499,22 @@ export class Integrations {
   }
   checkLimits(bindings: Bindings, deviceId?: string, sceneId?: string) {
     for (const id of new Set(
-      Object.values(bindings).map((binding) => binding.integrationId),
+      Object.values(bindings)
+        .flatMap(bindingSources)
+        .map((binding) => binding.integrationId),
     )) {
       const sources = new Set(
         (
           this.store.db
             .prepare(
-              "SELECT source_id FROM scene_input_bindings WHERE integration_id = ? AND scene_id != ?",
+              `SELECT source_id FROM scene_input_bindings WHERE integration_id = ? AND scene_id != ?
+               UNION SELECT source_id FROM scene_calendar_sources WHERE integration_id = ? AND scene_id != ?`,
             )
             .all(
+              id,
+              sceneId ??
+                (deviceId ? this.store.selection(deviceId)?.sceneId : "") ??
+                "",
               id,
               sceneId ??
                 (deviceId ? this.store.selection(deviceId)?.sceneId : "") ??
@@ -429,7 +522,7 @@ export class Integrations {
             ) as { source_id: string }[]
         ).map((row) => row.source_id),
       );
-      for (const binding of Object.values(bindings))
+      for (const binding of Object.values(bindings).flatMap(bindingSources))
         if (binding.integrationId === id) sources.add(binding.sourceId);
       if (sources.size > 256)
         throw new UserError(
@@ -442,6 +535,7 @@ export class Integrations {
     bindings: Bindings,
     overrides?: Map<string, Map<string, Reading>>,
     scope?: PhotoScope,
+    timezone = "UTC",
   ): FaceData {
     const inputs = manifest.schemaVersion !== 1 ? manifest.inputs : [];
     return faceDataSchema.parse(
@@ -449,6 +543,15 @@ export class Integrations {
         inputs.map((input) => {
           const binding = bindings[input.key];
           if (!binding) return [input.key, emptyDatum(input)];
+          if (isCalendarBinding(binding))
+            return [
+              input.key,
+              input.type === "calendar"
+                ? this.calendars.data(binding, timezone)
+                : emptyDatum(input, "unavailable"),
+            ];
+          if (input.type === "calendar")
+            return [input.key, emptyDatum(input, "unavailable")];
           const runtime = this.runtimes.get(binding.integrationId);
           if (!this.store.integration(binding.integrationId)?.enabled)
             return [input.key, emptyDatum(input, "unavailable")];
@@ -500,15 +603,26 @@ export class Integrations {
     this.previewCount++;
     const overrides = new Map<string, Map<string, Reading>>();
     const watches: Watch[] = [];
+    let closeCalendars: (() => void) | undefined;
     const abort = () => {
       for (const watch of watches) watch.close();
+      closeCalendars?.();
     };
     signal?.addEventListener("abort", abort, { once: true });
     try {
+      closeCalendars = await this.calendars.preview(
+        Object.values(bindings).filter(isCalendarBinding),
+        signal,
+      );
+      if (signal?.aborted) closeCalendars();
       await Promise.all(
         [
           ...new Set(
-            Object.values(bindings).map((binding) => binding.integrationId),
+            Object.values(bindings)
+              .flatMap((binding) =>
+                isCalendarBinding(binding) ? [] : [binding],
+              )
+              .map((binding) => binding.integrationId),
           ),
         ].map(async (id) => {
           const runtime = this.runtimes.get(id);
@@ -516,6 +630,9 @@ export class Integrations {
           const ids = [
             ...new Set(
               Object.values(bindings)
+                .flatMap((binding) =>
+                  isCalendarBinding(binding) ? [] : [binding],
+                )
                 .filter((binding) => binding.integrationId === id)
                 .map((binding) => binding.sourceId),
             ),
@@ -530,7 +647,13 @@ export class Integrations {
             throw new UserError("Integration changed. Try again.", 409);
         }),
       );
-      return this.data(manifest, bindings, overrides, scope);
+      return this.data(
+        manifest,
+        bindings,
+        overrides,
+        scope,
+        scope ? this.store.device(scope.deviceId)?.timezone : "UTC",
+      );
     } catch (error) {
       if (error instanceof UserError) throw error;
       throw new UserError(
@@ -539,6 +662,7 @@ export class Integrations {
       );
     } finally {
       for (const watch of watches) watch.close();
+      closeCalendars?.();
       signal?.removeEventListener("abort", abort);
       this.previewCount--;
     }
@@ -603,6 +727,7 @@ export class Integrations {
     }
   }
   retry(id: string) {
+    this.calendars.retry(id);
     const runtime = this.runtimes.get(id);
     if (
       runtime &&
@@ -627,5 +752,6 @@ export class Integrations {
     for (const operation of this.operations) operation.abort();
     this.runtimes.clear();
     this.photos.close();
+    this.calendars.close();
   }
 }

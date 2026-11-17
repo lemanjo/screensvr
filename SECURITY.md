@@ -11,7 +11,7 @@ Please use [GitHub's private vulnerability reporting](https://github.com/lemanjo
 instead of opening a public issue containing exploit details or credentials.
 This is a solo-maintained project; there is no guaranteed response time.
 
-Never include administrator passwords, session cookies, photo capability URLs,
+Never include administrator passwords, session cookies, calendar subscription URLs, photo capability URLs,
 database backups, or other live credentials in a report. If a secret has been exposed, revoke or
 rotate it immediately; deleting a file or rewriting Git history is not enough.
 
@@ -41,6 +41,14 @@ rotate it immediately; deleting a file or rewriting Git history is not enough.
   even on cache hits; hidden/locked and trashed assets are excluded. Original
   downloads and redirects are not used. Revocation cannot erase photos already
   downloaded by a viewer or retained on a display.
+- Entire iCalendar subscription URLs are bearer credentials, encrypted server-side
+  and hidden after saving. Do not log/share them, and rotate exposed URLs at the
+  provider. Calendar timing is public display data; titles are default-off and
+  require per-calendar opt-in. Redaction happens before public state/SSE and face
+  data, not in the face. Descriptions, locations, attendees, links, and source IDs
+  are never published. Home Assistant's calendar API does not expose private-event
+  flags: use busy-only for sensitive calendars. Revocation cannot erase data
+  already received by viewers or disconnected displays.
 - Face packages contain trusted executable JavaScript. Their sandbox is defense
   in depth, not a guarantee that malicious packages are safe.
 - Do not use development servers or the Docker-socket-enabled development

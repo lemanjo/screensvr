@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Face, Settings } from "../shared/contracts.js";
-import type { Bindings } from "../shared/face-data.js";
+import { isCalendarBinding, type Bindings } from "../shared/face-data.js";
 import { chmodSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { Scene, Schedule } from "../shared/scenes.js";
@@ -8,7 +8,7 @@ import { resolveSchedule } from "./scheduler.js";
 
 export type IntegrationRow = {
   id: string;
-  type: "home-assistant" | "mounted-folder" | "immich";
+  type: "home-assistant" | "mounted-folder" | "immich" | "ical";
   name: string;
   base_url: string;
   credentials: string;
@@ -54,7 +54,7 @@ export class Store {
     const version = (
       this.db.prepare("PRAGMA user_version").get() as { user_version: number }
     ).user_version;
-    if (version > 4) {
+    if (version > 5) {
       this.db.close();
       throw new Error("This database requires a newer screensvr version.");
     }
@@ -198,6 +198,23 @@ export class Store {
         throw error;
       }
     }
+    if (version < 5) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE scene_calendar_sources (
+          scene_id TEXT NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
+          input_key TEXT NOT NULL,
+          integration_id TEXT NOT NULL REFERENCES integrations(id) ON DELETE RESTRICT,
+          source_id TEXT NOT NULL,
+          position INTEGER NOT NULL,
+          show_title INTEGER NOT NULL DEFAULT 0 CHECK(show_title IN (0, 1)),
+          PRIMARY KEY(scene_id, input_key, integration_id, source_id)
+        );
+        CREATE INDEX calendar_sources_integration ON scene_calendar_sources(integration_id);
+        PRAGMA user_version = 5;
+        COMMIT;
+      `);
+    }
   }
 
   getMeta(key: string): string | undefined {
@@ -234,12 +251,34 @@ export class Store {
       integration_id: string;
       source_id: string;
     }[];
-    return Object.fromEntries(
+    const bindings: Bindings = Object.fromEntries(
       rows.map((row) => [
         row.input_key,
         { integrationId: row.integration_id, sourceId: row.source_id },
       ]),
     );
+    const calendars = this.db
+      .prepare(
+        "SELECT input_key, integration_id, source_id, show_title FROM scene_calendar_sources WHERE scene_id = ? ORDER BY position",
+      )
+      .all(id) as {
+      input_key: string;
+      integration_id: string;
+      source_id: string;
+      show_title: number;
+    }[];
+    for (const row of calendars) {
+      const binding = bindings[row.input_key] ?? { calendars: [] };
+      if (!isCalendarBinding(binding))
+        throw new Error("Conflicting input bindings.");
+      binding.calendars.push({
+        integrationId: row.integration_id,
+        sourceId: row.source_id,
+        showTitle: Boolean(row.show_title),
+      });
+      bindings[row.input_key] = binding;
+    }
+    return bindings;
   }
 
   replaceBindings(id: string, bindings: Bindings) {
@@ -250,17 +289,37 @@ export class Store {
     this.db
       .prepare("DELETE FROM scene_input_bindings WHERE scene_id = ?")
       .run(id);
+    this.db
+      .prepare("DELETE FROM scene_calendar_sources WHERE scene_id = ?")
+      .run(id);
     const insert = this.db.prepare(
       "INSERT INTO scene_input_bindings VALUES (?, ?, ?, ?)",
     );
-    for (const [key, binding] of Object.entries(bindings))
-      insert.run(id, key, binding.integrationId, binding.sourceId);
+    const calendar = this.db.prepare(
+      "INSERT INTO scene_calendar_sources VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    for (const [key, binding] of Object.entries(bindings)) {
+      if (isCalendarBinding(binding)) {
+        binding.calendars.forEach((source, position) =>
+          calendar.run(
+            id,
+            key,
+            source.integrationId,
+            source.sourceId,
+            position,
+            Number(source.showTitle),
+          ),
+        );
+      } else insert.run(id, key, binding.integrationId, binding.sourceId);
+    }
   }
 
   usage(id: string) {
     return this.db
       .prepare(
-        "SELECT DISTINCT devices.id, devices.name FROM devices JOIN scenes s ON s.device_id = devices.id JOIN scene_input_bindings b ON b.scene_id = s.id WHERE b.integration_id = ? ORDER BY devices.name",
+        `SELECT DISTINCT devices.id, devices.name FROM devices JOIN scenes s ON s.device_id = devices.id
+         JOIN (SELECT scene_id, integration_id FROM scene_input_bindings UNION SELECT scene_id, integration_id FROM scene_calendar_sources) b
+         ON b.scene_id = s.id WHERE b.integration_id = ? ORDER BY devices.name`,
       )
       .all(id) as { id: string; name: string }[];
   }

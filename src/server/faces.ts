@@ -34,6 +34,7 @@ export class Faces {
       "builtin-stillroom",
       "builtin-photos",
       "builtin-weather",
+      "builtin-calendar",
     ]) {
       const manifest = manifestSchema.parse(
         JSON.parse(

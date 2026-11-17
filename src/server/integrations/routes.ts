@@ -8,11 +8,14 @@ import { UserError } from "../faces.js";
 import type { Integrations } from "./manager.js";
 import { baseUrl, immichUrl } from "./network.js";
 import { folderSchema } from "./mounted-folder.js";
+import { calendarTimezone, feedUrl } from "./calendar-http.js";
 
 const name = z.string().trim().min(1).max(80);
 const rawUrl = z.string().max(2048);
 const url = rawUrl.transform((value) => baseUrl(value));
 const immichBaseUrl = rawUrl.transform(immichUrl);
+const calendarFeedUrl = z.string().min(1).max(2048).transform(feedUrl);
+const calendarZone = z.string().min(1).max(100).transform(calendarTimezone);
 const token = z
   .string()
   .min(1)
@@ -29,6 +32,15 @@ const createHomeAssistant = z
   .strict();
 const create = z.discriminatedUnion("type", [
   createHomeAssistant,
+  z
+    .object({
+      type: z.literal("ical"),
+      name,
+      feedUrl: calendarFeedUrl,
+      timezone: calendarZone,
+      enabled: z.boolean().optional(),
+    })
+    .strict(),
   createHomeAssistant.extend({
     type: z.literal("immich"),
     baseUrl: immichBaseUrl,
@@ -50,6 +62,8 @@ const edit = z
     folder: folderSchema.optional(),
     token: token.optional(),
     enabled: z.boolean().optional(),
+    feedUrl: calendarFeedUrl.optional(),
+    timezone: calendarZone.optional(),
   })
   .strict();
 const test = z
@@ -57,6 +71,8 @@ const test = z
     baseUrl: rawUrl.optional(),
     token: token.optional(),
     folder: folderSchema.optional(),
+    feedUrl: calendarFeedUrl.optional(),
+    timezone: calendarZone.optional(),
   })
   .strict();
 const draft = z
@@ -103,7 +119,9 @@ export function integrationRoutes(
     let credentials = "";
     try {
       if (input.type !== "mounted-folder")
-        credentials = integrations.secrets.encrypt(input.token);
+        credentials = integrations.secrets.encrypt(
+          input.type === "ical" ? input.feedUrl : input.token,
+        );
     } catch {
       throw new UserError(
         "Integration key is missing or invalid. Restore integration-key from your backup.",
@@ -118,7 +136,11 @@ export function integrationRoutes(
         id,
         input.type,
         input.name,
-        input.type === "mounted-folder" ? input.folder : input.baseUrl,
+        input.type === "ical"
+          ? input.timezone
+          : input.type === "mounted-folder"
+            ? input.folder
+            : input.baseUrl,
         credentials,
         input.enabled === false ? 0 : 1,
       );
@@ -135,6 +157,17 @@ export function integrationRoutes(
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
       if (
+        (row.type === "ical" &&
+          (input.baseUrl !== undefined ||
+            input.token !== undefined ||
+            input.folder !== undefined)) ||
+        (row.type !== "ical" &&
+          (input.feedUrl !== undefined || input.timezone !== undefined))
+      )
+        throw new UserError(
+          "These settings do not belong to this integration type.",
+        );
+      if (
         (row.type !== "mounted-folder" && input.folder !== undefined) ||
         (row.type === "mounted-folder" &&
           (input.baseUrl !== undefined || input.token !== undefined))
@@ -148,9 +181,11 @@ export function integrationRoutes(
           409,
         );
       let credentials = row.credentials;
-      if (input.token) {
+      if (input.token || input.feedUrl) {
         try {
-          credentials = integrations.secrets.encrypt(input.token);
+          credentials = integrations.secrets.encrypt(
+            (input.feedUrl ?? input.token)!,
+          );
         } catch {
           throw new UserError(
             "Integration key is missing or invalid. Restore integration-key from your backup.",
@@ -164,7 +199,8 @@ export function integrationRoutes(
         )
         .run(
           input.name ?? row.name,
-          input.folder ??
+          input.timezone ??
+            input.folder ??
             (input.baseUrl === undefined
               ? row.base_url
               : row.type === "immich"
@@ -198,6 +234,24 @@ export function integrationRoutes(
     },
   );
   app.post("/api/integrations/test", limited, async (request) => {
+    if ((request.body as { type?: string })?.type === "ical") {
+      const input = z
+        .object({
+          type: z.literal("ical"),
+          feedUrl: calendarFeedUrl,
+          timezone: calendarZone,
+        })
+        .strict()
+        .parse(request.body);
+      try {
+        return await integrations.calendars.test(input.feedUrl, input.timezone);
+      } catch {
+        throw new UserError(
+          "Could not read the calendar feed. Check its direct URL, format, network, and source limits.",
+          502,
+        );
+      }
+    }
     if ((request.body as { type?: string })?.type === "mounted-folder") {
       const input = z
         .object({
@@ -236,6 +290,48 @@ export function integrationRoutes(
       const input = test.parse(request.body ?? {});
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
+      if (row.type === "ical") {
+        if (
+          input.baseUrl !== undefined ||
+          input.token !== undefined ||
+          input.folder !== undefined
+        )
+          throw new UserError(
+            "Calendar feeds use a subscription URL and timezone.",
+          );
+        let savedUrl: string;
+        try {
+          savedUrl =
+            input.feedUrl ?? integrations.secrets.decrypt(row.credentials);
+        } catch {
+          throw new UserError(
+            "Calendar URL cannot be read. Restore the matching integration-key.",
+            503,
+          );
+        }
+        let result: { ok: boolean };
+        try {
+          result = await integrations.calendars.test(
+            savedUrl,
+            input.timezone ?? row.base_url,
+          );
+        } catch {
+          throw new UserError(
+            "Could not read the calendar feed. Check its direct URL, format, network, and source limits.",
+            502,
+          );
+        }
+        if (
+          !input.feedUrl &&
+          (!input.timezone || input.timezone === row.base_url)
+        )
+          integrations.retry(row.id);
+        return result;
+      }
+      if (input.feedUrl !== undefined || input.timezone !== undefined)
+        throw new UserError(
+          "These settings do not belong to this integration type.",
+        );
       if (row.type === "mounted-folder") {
         if (input.baseUrl !== undefined || input.token !== undefined)
           throw new UserError("Mounted folders do not use a URL or token.");
@@ -267,7 +363,8 @@ export function integrationRoutes(
         credential,
         row.type,
       );
-      if (!input.baseUrl && !input.token) integrations.retry(row.id);
+      if ((!input.baseUrl || input.baseUrl === row.base_url) && !input.token)
+        integrations.retry(row.id);
       return result;
     },
   );
@@ -291,7 +388,15 @@ export function integrationRoutes(
           limit: z.coerce.number().int().min(1).max(500).default(100),
           refresh: z.enum(["true", "false"]).optional(),
           type: z
-            .enum(["number", "boolean", "text", "image", "weather", "forecast"])
+            .enum([
+              "number",
+              "boolean",
+              "text",
+              "image",
+              "weather",
+              "forecast",
+              "calendar",
+            ])
             .optional(),
           quantity: z.enum(["temperature", "humidity"]).optional(),
           period: z.enum(["daily", "hourly"]).optional(),
@@ -299,7 +404,11 @@ export function integrationRoutes(
         .strict()
         .parse(request.query);
       const sources = (
-        await integrations.discover(request.params.id, query.refresh === "true")
+        await integrations.discover(
+          request.params.id,
+          query.refresh === "true",
+          query.type === "calendar",
+        )
       ).filter(
         (item) =>
           `${item.id} ${item.label}`

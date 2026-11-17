@@ -6,25 +6,26 @@ directory share one persistent data volume. No cloud service is required.
 
 ## Implementation
 
-| Location                        | Responsibility                                                  |
-| ------------------------------- | --------------------------------------------------------------- |
-| `src/server/app.ts`             | Fastify routes, access control, HTTP security, static hosting   |
-| `src/server/db.ts`              | SQLite schema and queries                                       |
-| `src/server/faces.ts`           | Bundled faces and bounded ZIP installation                      |
-| `src/server/auth.ts`            | Password hashing and administrator sessions                     |
-| `src/server/events.ts`          | Display connections, heartbeats, notifications                  |
-| `src/server/integrations/`      | Built-in server-side connectors, management routes, live caches |
-| `src/server/display-state.ts`   | Selected-data projection and ordered display snapshots          |
-| `src/server/scenes.ts`          | Revision-checked scene and weekly schedule management           |
-| `src/server/scheduler.ts`       | Timezone-aware scene resolution and transition notifications    |
-| `src/server/integration-key.ts` | Authenticated encryption and persistent integration key         |
-| `src/server/photos.ts`          | Scoped photo capabilities and bounded resized-image cache       |
-| `src/shared/contracts.ts`       | Versioned manifests and configuration validation                |
-| `web/src/App.tsx`               | Administrator setup, display management, face library           |
-| `web/src/Display.tsx`           | Permanent display addresses, reconnects, fullscreen, wake locks |
-| `web/src/FaceFrame.tsx`         | Shared preview/display renderer and message bridge              |
-| `public/face-sdk.js`            | Framework-independent browser SDK                               |
-| `faces/`                        | Six immutable bundled faces                                     |
+| Location                               | Responsibility                                                  |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `src/server/app.ts`                    | Fastify routes, access control, HTTP security, static hosting   |
+| `src/server/db.ts`                     | SQLite schema and queries                                       |
+| `src/server/faces.ts`                  | Bundled faces and bounded ZIP installation                      |
+| `src/server/auth.ts`                   | Password hashing and administrator sessions                     |
+| `src/server/events.ts`                 | Display connections, heartbeats, notifications                  |
+| `src/server/integrations/`             | Built-in server-side connectors, management routes, live caches |
+| `src/server/integrations/calendars.ts` | Private calendar occurrence cache, merging, privacy projection  |
+| `src/server/display-state.ts`          | Selected-data projection and ordered display snapshots          |
+| `src/server/scenes.ts`                 | Revision-checked scene and weekly schedule management           |
+| `src/server/scheduler.ts`              | Timezone-aware scene resolution and transition notifications    |
+| `src/server/integration-key.ts`        | Authenticated encryption and persistent integration key         |
+| `src/server/photos.ts`                 | Scoped photo capabilities and bounded resized-image cache       |
+| `src/shared/contracts.ts`              | Versioned manifests and configuration validation                |
+| `web/src/App.tsx`                      | Administrator setup, display management, face library           |
+| `web/src/Display.tsx`                  | Permanent display addresses, reconnects, fullscreen, wake locks |
+| `web/src/FaceFrame.tsx`                | Shared preview/display renderer and message bridge              |
+| `public/face-sdk.js`                   | Framework-independent browser SDK                               |
+| `faces/`                               | Eight immutable bundled faces                                   |
 
 Vite builds the frontend; TypeScript compiles the server. Management is loaded
 separately from the display client so displays do not download the management UI
@@ -50,6 +51,10 @@ and manifest-validation code.
   on scene/device deletion. Changing a scene's face resets only that scene's
   bindings; activating a different scene never clears them. Referenced
   integrations and faces cannot be deleted while any saved scene uses them.
+- **Calendar selections:** schema v5 adds separate per-scene/input source rows,
+  with ordering and default-off title publication flags. Existing scalar/photo/
+  weather binding rows are unchanged. Calendar integration references participate
+  in deletion protection and saved-source limits, including inactive scenes.
 
 Foreign keys prevent deleting assigned faces. Updates use an expected revision
 to reject stale edits. SQLite uses WAL mode, foreign keys, and versioned
@@ -160,6 +165,9 @@ inputs, independently selected and independently fresh. Earlier manifest schemas
 remain unchanged. The host validates and projects nested weather fields rather
 than forwarding arbitrary provider objects; the dependency-free display bundle
 does not import server schemas or provider code.
+Manifest v5/protocol v5 adds a structured calendar input containing one selected
+appointment or a confirmed-empty result. Busy-only/title redaction is performed
+before public snapshots, not by browser presentation.
 
 ## Integration boundary
 
@@ -196,6 +204,31 @@ forecasts retain at most seven daily or 24 hourly entries in memory.
 Credentials are encrypted with a key in the same persistent volume. This limits
 database-only disclosure, not full-volume compromise. API DTOs/logging exclude
 secrets. Display readings remain publicly readable to anyone reaching the server.
+
+Calendar sources use a separate provider-independent occurrence cache, never
+public `FaceData` event arrays. Home Assistant calendars reuse the saved token
+with GET-only discovery and bounded date-range REST reads, independently of its
+sensor/weather stream. Each iCalendar integration stores its entire bearer URL
+in encrypted credentials; the non-secret configuration stores its fallback
+timezone, not a plaintext subscription address.
+
+Only active calendar bindings and bounded previews acquire source consumers.
+Four concurrent window reads refresh approximately every five minutes, sharing
+results between consumers. Feed parsing/recurrence expansion runs in bounded,
+terminable workers using a pinned `node-ical` parser; the downloader remains
+under screensvr's DNS/TLS/redirect/size/timeout policy. Raw events and feed text
+are memory-only. The last consumer releases them and cancels pending work.
+Connection revisions and abort signals prevent replaced reads from being accepted.
+
+Projection uses each display's timezone, keeps ongoing events until their end,
+and prefers timed events on the earliest relevant local day. Only event timing
+and explicitly opted-in titles cross the boundary. Private classifications
+remain redacted when available; HA's event API does not supply them. Partial
+failures cannot produce a confirmed-empty result. Confirmation age is capped
+at 15 minutes independently of the 90-second display transport lease. Boundary
+timers handle event starts/ends and minute rollover, with a 30-second maximum
+sleep to detect wall-clock changes. The face independently hides ended events
+while disconnected but cannot reveal the next unpublished event.
 
 Mounted-folder connections scan only below the configured photo root. They skip
 hidden entries and symlinks, use bounded scans, and periodically refresh selected

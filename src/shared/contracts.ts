@@ -4,6 +4,7 @@ import {
   inputSchema,
   scalarInputSchema,
   weatherInputSchema,
+  calendarInputSchema,
   type Bindings,
   type FaceData,
 } from "./face-data.js";
@@ -88,6 +89,13 @@ export const manifestSchema = z
         ...manifestFields,
         schemaVersion: z.literal(4),
         inputs: z.array(weatherInputSchema).max(16),
+      })
+      .strict(),
+    z
+      .object({
+        ...manifestFields,
+        schemaVersion: z.literal(5),
+        inputs: z.array(calendarInputSchema).max(16),
       })
       .strict(),
   ])

@@ -163,7 +163,7 @@ kiosk app, not by screensvr.
 
 ## Included screen faces
 
-Seven faces are ready to use. These screenshots show the original clock designs.
+Eight faces are ready to use. These screenshots show the original clock designs.
 Each face has its own options for colors, clock style, or animation.
 
 | Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
@@ -188,6 +188,13 @@ Weather animation can be disabled and respects reduced-motion preferences.
 Choose a Home Assistant weather entity under **Data sources**, then select
 **Next three days** or **Next six hours** in **Forecast view**.
 See [weather setup](docs/integrations.md#weather).
+
+**Calendar Hours** pairs a quiet clock with one appointment from explicitly
+selected **iCalendar feeds and Home Assistant calendars**. Merge up to eight
+calendars under **Data sources → Next appointment**. Busy-only is the default;
+publishing event titles requires an explicit opt-in for each calendar. Ongoing
+appointments stay until they end, with all-day events as a fallback.
+See [calendar setup and privacy](docs/integrations.md#calendars).
 
 **Photo Hours** shows a selected photo or a slideshow from a mounted directory
 or an **Immich album**, with an optional clock. Choose its photos under the
@@ -214,7 +221,7 @@ Add a **Home Assistant** connection under **Integrations**, then select a sensor
 in a display's **Data sources** settings. Slow Hours and Stillroom can show a room
 temperature; Weather Hours uses weather entities for current conditions and
 daily/hourly forecasts. Other faces can declare numeric, humidity, boolean, text,
-photo, or structured weather inputs.
+photo, structured weather, or next-appointment calendar inputs.
 Faces receive only the selected readings through the SDK, never your credentials.
 
 Connections are read-only and shared across displays, while each display chooses

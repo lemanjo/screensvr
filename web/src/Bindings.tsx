@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import type { FaceManifest } from "../../src/shared/contracts.js";
 import {
   compatible,
+  isCalendarBinding,
   type Bindings,
   type FaceData,
   type FaceInput,
   type Integration,
   type Source,
+  type SourceBinding,
+  type CalendarBinding,
 } from "../../src/shared/face-data.js";
 import { api, errorMessage } from "./api.js";
 import { Select } from "./Select.js";
@@ -18,9 +21,9 @@ function BindingField({
   onChange,
 }: {
   input: FaceInput;
-  binding?: Bindings[string];
+  binding?: SourceBinding;
   integrations: Integration[];
-  onChange: (binding?: Bindings[string]) => void;
+  onChange: (binding?: SourceBinding) => void;
 }) {
   const [integrationId, setIntegrationId] = useState(
     binding?.integrationId ?? "",
@@ -93,10 +96,13 @@ function BindingField({
           { value: "", label: "Not connected" },
           ...integrations
             .filter((integration) =>
-              input.type === "image"
-                ? integration.type === "mounted-folder" ||
-                  integration.type === "immich"
-                : integration.type === "home-assistant",
+              input.type === "calendar"
+                ? integration.type === "home-assistant" ||
+                  integration.type === "ical"
+                : input.type === "image"
+                  ? integration.type === "mounted-folder" ||
+                    integration.type === "immich"
+                  : integration.type === "home-assistant",
             )
             .map((integration) => ({
               value: integration.id,
@@ -112,7 +118,7 @@ function BindingField({
       />
       {integrationId && (
         <Select
-          label={`${input.label} ${input.type === "image" ? "photo source" : input.type === "weather" || input.type === "forecast" ? "weather source" : "sensor"}`}
+          label={`${input.label} ${input.type === "calendar" ? "calendar" : input.type === "image" ? "photo source" : input.type === "weather" || input.type === "forecast" ? "weather source" : "sensor"}`}
           value={binding?.sourceId ?? ""}
           searchable
           onSearch={(value) => {
@@ -133,14 +139,16 @@ function BindingField({
       )}
       {!loading && !error && integrationId && !matching.length && (
         <small>
-          {input.type === "image"
-            ? integrations.find((item) => item.id === integrationId)?.type ===
-              "immich"
-              ? "No albums found. Check album access in Immich or search by album name."
-              : "No photos found. Check the folder mount or search by folder/file name."
-            : input.type === "weather" || input.type === "forecast"
-              ? `No compatible weather sources found.${input.type === "forecast" ? ` The entity must support ${input.period} forecasts.` : ""} Search by friendly name or entity ID.`
-              : "No compatible sensors found. Search by friendly name or entity ID."}
+          {input.type === "calendar"
+            ? "No calendars found. Check calendar access and availability in the integration."
+            : input.type === "image"
+              ? integrations.find((item) => item.id === integrationId)?.type ===
+                "immich"
+                ? "No albums found. Check album access in Immich or search by album name."
+                : "No photos found. Check the folder mount or search by folder/file name."
+              : input.type === "weather" || input.type === "forecast"
+                ? `No compatible weather sources found.${input.type === "forecast" ? ` The entity must support ${input.period} forecasts.` : ""} Search by friendly name or entity ID.`
+                : "No compatible sensors found. Search by friendly name or entity ID."}
         </small>
       )}
       {total > limit && (
@@ -158,6 +166,91 @@ function BindingField({
         </small>
       )}
     </div>
+  );
+}
+
+function CalendarBindingField({
+  input,
+  binding,
+  integrations,
+  onChange,
+}: {
+  input: FaceInput;
+  binding?: CalendarBinding;
+  integrations: Integration[];
+  onChange: (binding?: Bindings[string]) => void;
+}) {
+  const [generation, setGeneration] = useState(0);
+  const sources = binding?.calendars ?? [];
+  const update = (calendars: CalendarBinding["calendars"]) =>
+    onChange(calendars.length ? { calendars } : undefined);
+  return (
+    <section className="calendar-bindings">
+      <h3>{input.label}</h3>
+      <p className="fine-print">
+        Merge up to eight calendars. Busy-only is the default. Enabling titles
+        publishes them to anyone who can reach this display URL—even if the face
+        hides them. Descriptions, locations, attendees, and links are never
+        shared.
+      </p>
+      {sources.map((source, index) => (
+        <div
+          className="binding-field"
+          key={`${source.integrationId}/${source.sourceId}`}
+        >
+          <strong>
+            {integrations.find((item) => item.id === source.integrationId)
+              ?.name ?? "Unavailable integration"}{" "}
+            · {source.sourceId}
+          </strong>
+          <label className="toggle-field">
+            <span>Publish event titles</span>
+            <input
+              type="checkbox"
+              checked={source.showTitle}
+              onChange={(event) =>
+                update(
+                  sources.map((item, position) =>
+                    position === index
+                      ? { ...item, showTitle: event.target.checked }
+                      : item,
+                  ),
+                )
+              }
+            />
+          </label>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() =>
+              update(sources.filter((_, position) => position !== index))
+            }
+          >
+            Remove calendar
+          </button>
+        </div>
+      ))}
+      {sources.length < 8 && (
+        <BindingField
+          key={generation}
+          input={{ ...input, label: "Add calendar" }}
+          integrations={integrations}
+          onChange={(source) => {
+            if (
+              !source ||
+              sources.some(
+                (item) =>
+                  item.integrationId === source.integrationId &&
+                  item.sourceId === source.sourceId,
+              )
+            )
+              return;
+            update([...sources, { ...source, showTitle: false }]);
+            setGeneration((value) => value + 1);
+          }}
+        />
+      )}
+    </section>
   );
 }
 
@@ -189,20 +282,36 @@ export function BindingFields({
           a source.
         </p>
       )}
-      {face.inputs.map((input) => (
-        <BindingField
-          key={`${face.id}/${input.key}`}
-          input={input}
-          binding={bindings[input.key]}
-          integrations={integrations}
-          onChange={(binding) => {
-            const next = { ...bindings };
-            if (binding) next[input.key] = binding;
-            else delete next[input.key];
-            onChange(next);
-          }}
-        />
-      ))}
+      {face.inputs.map((input) => {
+        const binding = bindings[input.key];
+        const update = (binding?: Bindings[string]) => {
+          const next = { ...bindings };
+          if (binding) next[input.key] = binding;
+          else delete next[input.key];
+          onChange(next);
+        };
+        return input.type === "calendar" ? (
+          <CalendarBindingField
+            key={`${face.id}/${input.key}`}
+            input={input}
+            integrations={integrations}
+            binding={
+              binding && isCalendarBinding(binding) ? binding : undefined
+            }
+            onChange={update}
+          />
+        ) : (
+          <BindingField
+            key={`${face.id}/${input.key}`}
+            input={input}
+            binding={
+              binding && !isCalendarBinding(binding) ? binding : undefined
+            }
+            integrations={integrations}
+            onChange={update}
+          />
+        );
+      })}
     </section>
   );
 }
@@ -242,7 +351,7 @@ export function useDataPreview(
         if (!controller.signal.aborted)
           timer = setTimeout(
             () => void refresh(),
-            face!.schemaVersion === 4 ? 30000 : 5000,
+            face!.schemaVersion >= 4 ? 30000 : 5000,
           );
       }
     }

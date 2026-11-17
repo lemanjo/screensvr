@@ -288,6 +288,63 @@ as if they describe current weather. The bundled
 [Weather Hours](../faces/builtin-weather/) face demonstrates this without any
 provider API, network access, or external animation assets.
 
+## Manifest v5: next appointment
+
+Use `"schemaVersion": 5` to add a provider-independent calendar input alongside
+v4's existing input types:
+
+```json
+{
+  "inputs": [
+    { "key": "calendar", "label": "Next appointment", "type": "calendar" }
+  ]
+}
+```
+
+The administrator explicitly selects up to eight calendars for this input.
+The server merges them and publishes **one** appointment, not the underlying
+event lists. A ready/stale datum's value is:
+
+```json
+{
+  "event": {
+    "kind": "timed",
+    "start": 1794920400000,
+    "end": 1794924000000,
+    "title": null
+  },
+  "complete": true
+}
+```
+
+Timed `start`/`end` are Unix milliseconds, with an exclusive end. All-day events
+instead contain `{ kind: "all-day", startDate: "2026-11-17",
+endDate: "2026-11-18", title: null }`. These dates are timezone-independent
+calendar dates with an exclusive end, not UTC-midnight instants.
+
+`title` is `null` in busy-only mode. Only a per-calendar administrator opt-in
+allows titles; faces cannot request or recover redacted details. No provider IDs,
+calendar names, URLs, descriptions, locations, or attendees are supplied.
+Existing v1–v4 manifests remain strict and cannot declare calendar inputs.
+
+A confirmed-empty calendar is **ready** with
+`{ event: null, complete: true }`. Partial/failed reads use stale status and
+`complete: false` when a retained aggregate is available. Do not show “no
+appointments” for incomplete, stale, loading, or unavailable data. `unit` and
+`updatedAt` are `null`; `observedAt` is the oldest successful confirmation among
+the confirmed selected calendars, not an event's modification time.
+
+The server retains ongoing timed events until their end and prefers timed
+appointments over all-day events on the earliest relevant display-local day.
+Format timed events using `context.timezone` and `context.locale`. Update
+time-dependent presentation locally; hide ended events on clock/visibility
+changes even if the host cannot be reached. Only one event is published, so a
+disconnected face cannot advance to the next unpublished event. Keep clocks
+working independently of calendar availability.
+
+The bundled [Calendar Hours](../faces/builtin-calendar/) demonstrates this
+without provider APIs, browser network access, or an agenda widget.
+
 ## SDK
 
 Load the host-provided SDK **before** your own script:

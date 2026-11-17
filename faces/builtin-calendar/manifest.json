@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 5,
+  "id": "builtin-calendar",
+  "version": "1.0.0",
+  "name": "Calendar Hours",
+  "description": "A quiet clock and the next appointment from your selected calendars. Busy-only by default; no agenda, reminders, or distractions.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "inputs": [
+    {
+      "key": "calendar",
+      "label": "Next appointment",
+      "type": "calendar",
+      "description": "The next appointment across explicitly selected calendars. Ongoing timed events stay until they end."
+    }
+  ],
+  "settings": [
+    {
+      "key": "background",
+      "label": "Background",
+      "type": "color",
+      "default": "#19191d"
+    },
+    {
+      "key": "text",
+      "label": "Clock and text",
+      "type": "color",
+      "default": "#ede6dc"
+    },
+    {
+      "key": "accent",
+      "label": "Calendar accent",
+      "type": "color",
+      "default": "#b9a4af"
+    },
+    {
+      "key": "format",
+      "label": "Time format",
+      "type": "select",
+      "default": "24",
+      "options": [
+        { "label": "24 hour", "value": "24" },
+        { "label": "12 hour", "value": "12" }
+      ]
+    },
+    {
+      "key": "showDate",
+      "label": "Show date",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}
