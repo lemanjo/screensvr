@@ -11,7 +11,7 @@ import {
 } from "../../shared/face-data.js";
 import type { IntegrationRow, Store } from "../db.js";
 import { UserError } from "../faces.js";
-import { Secrets } from "../secrets.js";
+import { Secrets } from "../integration-key.js";
 import {
   ConnectorError,
   HomeAssistant,

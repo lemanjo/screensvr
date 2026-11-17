@@ -1,9 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import {
-  chmodSync,
-  existsSync,
-  lstatSync,
-  readFileSync,
+  closeSync,
+  constants,
+  fchmodSync,
+  fstatSync,
+  fsyncSync,
+  openSync,
+  readSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -15,24 +18,56 @@ export class Secrets {
   private filename: string;
   constructor(directory: string, hasCredentials: boolean) {
     this.filename = path.join(directory, "integration-key");
-    if (!existsSync(this.filename)) {
-      if (hasCredentials) return;
+    let file: number;
+    const readFlags =
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+    try {
+      file = openSync(this.filename, readFlags);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT" || hasCredentials)
+        return;
       try {
-        writeFileSync(this.filename, randomBytes(32), {
-          flag: "wx",
-          mode: 0o600,
-        });
+        file = openSync(
+          this.filename,
+          constants.O_RDWR |
+            constants.O_CREAT |
+            constants.O_EXCL |
+            constants.O_NOFOLLOW,
+          0o600,
+        );
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") return;
+        try {
+          file = openSync(this.filename, readFlags);
+        } catch {
+          return;
+        }
+        this.load(file);
+        return;
+      }
+      try {
+        writeFileSync(file, randomBytes(32));
+        fsyncSync(file);
+      } catch {
+        closeSync(file);
+        return;
       }
     }
+    this.load(file);
+  }
+  private load(file: number) {
+    // Validate, chmod, and read the same open file. Path-based checks followed
+    // by path-based reads/chmods could follow a replacement or symlink.
     try {
-      if (!lstatSync(this.filename).isFile()) return;
-      chmodSync(this.filename, 0o600);
-      const key = readFileSync(this.filename);
-      if (key.length === 32) this.key = key;
+      const info = fstatSync(file);
+      if (!info.isFile() || info.size !== 32) return;
+      fchmodSync(file, 0o600);
+      const key = Buffer.alloc(32);
+      if (readSync(file, key, 0, key.length, 0) === key.length) this.key = key;
     } catch {
       // Unreadable keys disable integrations, not otherwise independent faces.
+    } finally {
+      closeSync(file);
     }
   }
   private requireKey() {

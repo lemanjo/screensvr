@@ -14,7 +14,7 @@ import {
   type Reading,
 } from "../src/server/integrations/home-assistant.js";
 import { normalize } from "../src/server/integrations/normalize.js";
-import { Secrets } from "../src/server/secrets.js";
+import { Secrets } from "../src/server/integration-key.js";
 
 describe("data contracts and normalization", () => {
   it("accepts v2 independently of strict v1 and rejects unsafe inputs", () => {

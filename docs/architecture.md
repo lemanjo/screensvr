@@ -6,22 +6,22 @@ directory share one persistent data volume. No cloud service is required.
 
 ## Implementation
 
-| Location                      | Responsibility                                                  |
-| ----------------------------- | --------------------------------------------------------------- |
-| `src/server/app.ts`           | Fastify routes, access control, HTTP security, static hosting   |
-| `src/server/db.ts`            | SQLite schema and queries                                       |
-| `src/server/faces.ts`         | Bundled faces and bounded ZIP installation                      |
-| `src/server/auth.ts`          | Password hashing and administrator sessions                     |
-| `src/server/events.ts`        | Display connections, heartbeats, notifications                  |
-| `src/server/integrations/`    | Built-in server-side connectors, management routes, live caches |
-| `src/server/display-state.ts` | Selected-data projection and ordered display snapshots          |
-| `src/server/secrets.ts`       | Authenticated encryption and persistent integration key         |
-| `src/shared/contracts.ts`     | Versioned manifests and configuration validation                |
-| `web/src/App.tsx`             | Administrator setup, display management, face library           |
-| `web/src/Display.tsx`         | Permanent display addresses, reconnects, fullscreen, wake locks |
-| `web/src/FaceFrame.tsx`       | Shared preview/display renderer and message bridge              |
-| `public/face-sdk.js`          | Framework-independent browser SDK                               |
-| `faces/`                      | Five immutable bundled faces                                    |
+| Location                        | Responsibility                                                  |
+| ------------------------------- | --------------------------------------------------------------- |
+| `src/server/app.ts`             | Fastify routes, access control, HTTP security, static hosting   |
+| `src/server/db.ts`              | SQLite schema and queries                                       |
+| `src/server/faces.ts`           | Bundled faces and bounded ZIP installation                      |
+| `src/server/auth.ts`            | Password hashing and administrator sessions                     |
+| `src/server/events.ts`          | Display connections, heartbeats, notifications                  |
+| `src/server/integrations/`      | Built-in server-side connectors, management routes, live caches |
+| `src/server/display-state.ts`   | Selected-data projection and ordered display snapshots          |
+| `src/server/integration-key.ts` | Authenticated encryption and persistent integration key         |
+| `src/shared/contracts.ts`       | Versioned manifests and configuration validation                |
+| `web/src/App.tsx`               | Administrator setup, display management, face library           |
+| `web/src/Display.tsx`           | Permanent display addresses, reconnects, fullscreen, wake locks |
+| `web/src/FaceFrame.tsx`         | Shared preview/display renderer and message bridge              |
+| `public/face-sdk.js`            | Framework-independent browser SDK                               |
+| `faces/`                        | Five immutable bundled faces                                    |
 
 Vite builds the frontend; TypeScript compiles the server. Management is loaded
 separately from the display client so displays do not download the management UI
