@@ -8,7 +8,7 @@ import {
   type Connector,
   type ConnectorFactory,
   type Reading,
-} from "../src/server/integrations/home-assistant.js";
+} from "../src/server/integrations/connector.js";
 import { normalize } from "../src/server/integrations/normalize.js";
 import type { FaceManifest } from "../src/shared/contracts.js";
 import { testManifest, temporaryDirectory } from "./helpers.js";

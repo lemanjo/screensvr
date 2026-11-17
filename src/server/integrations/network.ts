@@ -25,7 +25,7 @@ export function allowedAddress(address: string) {
   );
 }
 
-export function baseUrl(value: string) {
+export function baseUrl(value: string, provider = "Home Assistant") {
   try {
     const url = new URL(value);
     if (
@@ -41,9 +41,14 @@ export function baseUrl(value: string) {
     return url.href.replace(/\/+$/, "");
   } catch {
     throw new UserError(
-      "Enter an HTTP(S) Home Assistant base URL without credentials, query, fragment, or a link-local/metadata address.",
+      `Enter an HTTP(S) ${provider} base URL without credentials, query, fragment, or a link-local/metadata address.`,
     );
   }
+}
+
+export function immichUrl(value: string) {
+  // Accept either the instance URL or an explicitly supplied API root.
+  return baseUrl(value, "Immich").replace(/\/api$/, "");
 }
 
 export function websocketUrl(value: string) {

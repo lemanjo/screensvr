@@ -34,6 +34,13 @@ rotate it immediately; deleting a file or rewriting Git history is not enough.
   persistent volume. Full-volume backups still contain recoverable credentials.
   Prefer HTTPS and a dedicated least-privilege HA account; a read-only connector
   does not make its upstream token read-only.
+- Immich API keys have the same server-side encryption and backup sensitivity.
+  Grant only `album.read`, `asset.read`, and `asset.view`, ideally to a dedicated
+  account shared only into intended albums. The whole selected album is public
+  display content. Image requests recheck upstream access and album membership
+  even on cache hits; hidden/locked and trashed assets are excluded. Original
+  downloads and redirects are not used. Revocation cannot erase photos already
+  downloaded by a viewer or retained on a display.
 - Face packages contain trusted executable JavaScript. Their sandbox is defense
   in depth, not a guarantee that malicious packages are safe.
 - Do not use development servers or the Docker-socket-enabled development

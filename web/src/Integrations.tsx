@@ -18,7 +18,9 @@ function IntegrationEditor({
     integration?.type ?? "home-assistant",
   );
   const [baseUrl, setBaseUrl] = useState(
-    integration?.type === "home-assistant" ? integration.baseUrl : "",
+    integration && integration.type !== "mounted-folder"
+      ? integration.baseUrl
+      : "",
   );
   const [folder, setFolder] = useState(
     integration?.type === "mounted-folder" ? integration.folder : "",
@@ -28,6 +30,7 @@ function IntegrationEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const provider = type === "immich" ? "Immich" : "Home Assistant";
   async function test() {
     setBusy(true);
     setError("");
@@ -71,7 +74,7 @@ function IntegrationEditor({
             name,
             ...(type === "mounted-folder" ? { folder } : { baseUrl }),
             enabled,
-            ...(type === "home-assistant" && token
+            ...(type !== "mounted-folder" && token
               ? { token: token.trim() }
               : {}),
           }),
@@ -89,7 +92,7 @@ function IntegrationEditor({
     <Dialog
       title={
         integration
-          ? `Edit ${type === "mounted-folder" ? "mounted folders" : "Home Assistant"}`
+          ? `Edit ${type === "mounted-folder" ? "mounted folders" : provider}`
           : "Add integration"
       }
       onClose={onClose}
@@ -105,11 +108,19 @@ function IntegrationEditor({
             options={[
               { value: "home-assistant", label: "Home Assistant" },
               { value: "mounted-folder", label: "Mounted photo folders" },
+              { value: "immich", label: "Immich" },
             ]}
             onChange={(value) => {
               setType(value as Integration["type"]);
+              setBaseUrl("");
+              setToken("");
+              setFolder("");
               setName(
-                value === "mounted-folder" ? "Photo folders" : "Home Assistant",
+                value === "mounted-folder"
+                  ? "Photo folders"
+                  : value === "immich"
+                    ? "Immich"
+                    : "Home Assistant",
               );
               setError("");
               setNotice("");
@@ -119,7 +130,9 @@ function IntegrationEditor({
         <p>
           {type === "mounted-folder"
             ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
-            : "Connect once, then choose which sensors each display receives. Faces never receive your access token."}
+            : type === "immich"
+              ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
+              : "Connect once, then choose which sensors each display receives. Faces never receive your access token."}
         </p>
         <label>
           Connection name
@@ -150,24 +163,28 @@ function IntegrationEditor({
         ) : (
           <>
             <label>
-              Home Assistant URL
+              {provider} URL
               <input
                 required
                 type="url"
                 maxLength={2048}
-                placeholder="http://homeassistant.local:8123"
+                placeholder={
+                  type === "immich"
+                    ? "http://immich.local:2283"
+                    : "http://homeassistant.local:8123"
+                }
                 value={baseUrl}
                 onChange={(event) => setBaseUrl(event.target.value)}
               />
             </label>
             {baseUrl.startsWith("http:") && (
               <p className="integration-warning">
-                HTTP sends your token without encryption. Use it only on a
+                HTTP sends your credentials without encryption. Use it only on a
                 trusted network; prefer HTTPS.
               </p>
             )}
             <label>
-              Long-lived access token
+              {type === "immich" ? "API key" : "Long-lived access token"}
               <input
                 type="password"
                 autoComplete="new-password"
@@ -176,16 +193,17 @@ function IntegrationEditor({
                 maxLength={4096}
                 value={token}
                 placeholder={
-                  integration ? "Leave blank to keep the saved token" : ""
+                  integration
+                    ? `Leave blank to keep the saved ${type === "immich" ? "API key" : "token"}`
+                    : ""
                 }
                 onChange={(event) => setToken(event.target.value)}
               />
             </label>
             <small>
-              Create a long-lived access token in your Home Assistant profile
-              under Security. Prefer a dedicated, least-privilege account.
-              screensvr only reads data, but the token may permit other
-              operations.
+              {type === "immich"
+                ? "Create an API key in Immich user settings with album.read, asset.read, and asset.view permissions. No write or original-download permissions are needed. Prefer a dedicated account shared only into intended albums."
+                : "Create a long-lived access token in your Home Assistant profile under Security. Prefer a dedicated, least-privilege account. screensvr only reads data, but the token may permit other operations."}
             </small>
           </>
         )}
@@ -215,7 +233,7 @@ function IntegrationEditor({
             className="secondary"
             disabled={
               busy ||
-              (type === "home-assistant" &&
+              (type !== "mounted-folder" &&
                 (!baseUrl || (!integration && !token)))
             }
             onClick={() => void test()}
@@ -235,7 +253,7 @@ const statusLabels: Record<Integration["status"], string> = {
   connecting: "Connecting",
   connected: "Connected",
   disconnected: "Reconnecting",
-  "authentication-error": "Token rejected",
+  "authentication-error": "Check credentials",
   error: "Needs attention",
   disabled: "Disabled",
 };
@@ -296,8 +314,8 @@ export function IntegrationsPage({
           <div>
             <h2>A connection to your home.</h2>
             <p>
-              Add Home Assistant or mounted photo folders, then choose a source
-              in a display’s settings.
+              Add Home Assistant, Immich, or mounted photo folders, then choose
+              a source in a display’s settings.
             </p>
             <button className="primary" onClick={() => setEditing(null)}>
               Add your first integration
@@ -319,7 +337,9 @@ export function IntegrationsPage({
             <p className="muted">
               {integration.type === "home-assistant"
                 ? `Home Assistant · ${integration.baseUrl}`
-                : `Mounted photos · ${integration.folder || "All folders"}`}
+                : integration.type === "immich"
+                  ? `Immich · ${integration.baseUrl}`
+                  : `Mounted photos · ${integration.folder || "All folders"}`}
             </p>
             {integration.error && <p className="error">{integration.error}</p>}
             <div className="integration-usage">

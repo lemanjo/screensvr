@@ -1,30 +1,13 @@
 import WebSocket from "ws";
-import type { Datum, Source } from "../../shared/face-data.js";
+import type { Source } from "../../shared/face-data.js";
 import { normalize, type EntityState } from "./normalize.js";
 import { secureLookup, websocketUrl } from "./network.js";
-
-export class ConnectorError extends Error {
-  constructor(
-    message: string,
-    readonly authentication = false,
-  ) {
-    super(message);
-  }
-}
-export type Reading = { source: Source; reading: Datum };
-export type Watch = { ready: Promise<void>; close: () => void };
-export interface Connector {
-  discover(): Promise<Source[]>;
-  watch(ids: string[], callback: (values: Map<string, Reading>) => void): Watch;
-  confirm(): Promise<void>;
-  close(): void;
-}
-export type ConnectorFactory = (
-  url: string,
-  token: string,
-  disconnected: (error: ConnectorError) => void,
-  signal?: AbortSignal,
-) => Promise<Connector>;
+import {
+  ConnectorError,
+  type Connector,
+  type Reading,
+  type Watch,
+} from "./connector.js";
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;

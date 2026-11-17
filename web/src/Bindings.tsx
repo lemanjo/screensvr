@@ -87,7 +87,8 @@ function BindingField({
           ...integrations
             .filter((integration) =>
               input.type === "image"
-                ? integration.type === "mounted-folder"
+                ? integration.type === "mounted-folder" ||
+                  integration.type === "immich"
                 : integration.type === "home-assistant",
             )
             .map((integration) => ({
@@ -126,7 +127,10 @@ function BindingField({
       {!loading && !error && integrationId && !matching.length && (
         <small>
           {input.type === "image"
-            ? "No photos found. Check the folder mount or search by folder/file name."
+            ? integrations.find((item) => item.id === integrationId)?.type ===
+              "immich"
+              ? "No albums found. Check album access in Immich or search by album name."
+              : "No photos found. Check the folder mount or search by folder/file name."
             : "No compatible sensors found. Search by friendly name or entity ID."}
         </small>
       )}
@@ -167,6 +171,8 @@ export function BindingFields({
       <p className="fine-print">
         Choose only the data you want to share. Anyone who can access this
         display can read these values.
+        {face.inputs.some((input) => input.type === "image") &&
+          " Photo sources share the whole selected folder or album, not just the currently visible image."}
       </p>
       {!integrations.length && (
         <p>
