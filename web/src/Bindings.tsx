@@ -202,8 +202,9 @@ export function useDataPreview(
   deviceId: string,
   face: FaceManifest | undefined,
   bindings: Bindings,
+  sceneId?: string,
 ) {
-  const key = JSON.stringify([face?.id, face?.version, bindings]);
+  const key = JSON.stringify([sceneId, face?.id, face?.version, bindings]);
   const [result, setResult] = useState<{
     key: string;
     data?: FaceData;
@@ -221,7 +222,7 @@ export function useDataPreview(
           {
             method: "POST",
             signal: controller.signal,
-            body: JSON.stringify({ faceId: face!.id, bindings }),
+            body: JSON.stringify({ faceId: face!.id, bindings, sceneId }),
           },
         );
         if (!controller.signal.aborted) setResult({ key, data: response.data });

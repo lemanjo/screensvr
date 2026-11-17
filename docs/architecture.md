@@ -15,6 +15,8 @@ directory share one persistent data volume. No cloud service is required.
 | `src/server/events.ts`          | Display connections, heartbeats, notifications                  |
 | `src/server/integrations/`      | Built-in server-side connectors, management routes, live caches |
 | `src/server/display-state.ts`   | Selected-data projection and ordered display snapshots          |
+| `src/server/scenes.ts`          | Revision-checked scene and weekly schedule management           |
+| `src/server/scheduler.ts`       | Timezone-aware scene resolution and transition notifications    |
 | `src/server/integration-key.ts` | Authenticated encryption and persistent integration key         |
 | `src/server/photos.ts`          | Scoped photo capabilities and bounded resized-image cache       |
 | `src/shared/contracts.ts`       | Versioned manifests and configuration validation                |
@@ -32,16 +34,22 @@ and manifest-validation code.
 
 - **Faces:** one installed version per unique face ID, a validated manifest, and
   a bundled/installed flag.
-- **Devices:** internal UUID, unique permanent URL slug, friendly name, face
-  assignment, validated settings, IANA timezone, configuration revision, and
-  last-seen timestamp.
+- **Devices:** internal UUID, unique permanent URL slug, friendly name, IANA
+  timezone, manual scene selection, schedule enablement, configuration revision,
+  and last-seen timestamp.
+- **Scenes:** per-device named face configurations with validated settings and
+  explicit data bindings. Inactive scenes remain saved without being rendered.
+- **Schedule entries:** weekday (ISO Monday=1 through Sunday=7), local minute,
+  and scene. Duplicate weekday/start-time pairs are rejected. Composite foreign
+  keys keep selections and schedule references within their owning display.
 - **Administrator:** one salted scrypt password hash.
 - **Sessions:** hashed random session tokens, CSRF tokens, and expiry.
 - **Integrations:** named provider connections, encrypted credentials, enabled
   state, and optimistic configuration revisions.
-- **Input bindings:** explicit per-device input-to-source assignments, cascaded
-  on device deletion and cleared on face changes. Referenced integrations cannot
-  be deleted until unbound.
+- **Input bindings:** explicit per-scene input-to-source assignments, cascaded
+  on scene/device deletion. Changing a scene's face resets only that scene's
+  bindings; activating a different scene never clears them. Referenced
+  integrations and faces cannot be deleted while any saved scene uses them.
 
 Foreign keys prevent deleting assigned faces. Updates use an expected revision
 to reject stale edits. SQLite uses WAL mode, foreign keys, and versioned
@@ -96,6 +104,35 @@ Connections are bounded to ten per device and one hundred per server.
 
 There is no service worker or guaranteed offline cold start in v0.1.
 
+### Scheduled scenes
+
+Schema v4 migrates every existing display's face, settings, and bindings into a
+Default scene, retaining the configuration revision and permanent URL. Scheduling
+starts disabled. Devices can save at most 32 scenes and 64 grouped schedule
+entries (each selecting one or more weekdays).
+
+The server resolves weekly local-time entries into actual instants using Temporal.
+The latest occurrence selects the current scene; no end times or daily resets are
+needed. Spring-forward skipped entries apply at the jump, ordered by their nominal
+local starts; repeated-hour entries use their first occurrence only. Calendar-day
+arithmetic avoids assuming every day is 24 hours long.
+
+A next-transition timer with a 30-second maximum sleep handles clock changes.
+Startup, state reads, schedule edits, and timezone changes also reconcile the
+current selection. Missed transitions are not replayed. Scheduling does not write
+configuration revisions, so automatic transitions do not invalidate open editors.
+Scene/schedule mutations share the device's expected-revision guard and commit
+transactionally, with a second check after asynchronous binding validation.
+
+While scheduling is enabled, manual activation is rejected server-side. Disabling
+it saves the current effective scene as the manual selection. There are no timed
+overrides. Offline displays keep their current face until reconnection.
+
+Each activation has a separate in-memory generation. Saved photo grants include
+the selected scene and this generation, and revalidate them on every request and
+after asynchronous image work. A transition revokes old grants even when the
+configuration revision is unchanged, including A → B → A transitions.
+
 ## Face boundary
 
 Faces render in `sandbox="allow-scripts"` iframes, without `allow-same-origin`.
@@ -122,7 +159,9 @@ SDK helpers select/rotate images locally; the face retains control of presentati
 ## Integration boundary
 
 One connector per enabled connection authenticates server-side. Home Assistant
-uses filtered entity subscriptions, deduplicated across saved display bindings.
+uses filtered entity subscriptions, deduplicated across active scene bindings.
+Inactive bindings still count toward saved-source limits and deletion protection,
+but do not cause background subscriptions.
 Discovery is administrator-only; draft previews use bounded one-shot filtered
 reads without saving or modifying live displays. Only built-in connectors run
 on the server; face ZIPs do not contain server scripts.
@@ -172,12 +211,13 @@ the database record is created only after extraction succeeds. Failed staging
 content is cleaned up. A process crash may leave an unreferenced staging or
 reserved directory; these are never served, and are not automatically deleted.
 
-Installed versions are immutable. In v0.1, switch displays away, remove the old
-face, then install its replacement. Bundled faces cannot be removed.
+Installed versions are immutable. Reassign or delete every scene using an old
+face before removing it and installing its replacement. Bundled faces cannot be removed.
 
 ## Deliberately deferred
 
-Scheduling, registries, automatic updates and settings migrations, multi-user
+Shared scenes, scheduled overrides, solar/event-based scheduling, registries,
+automatic updates and settings migrations, multi-user
 roles, native kiosk control, and offline startup are not implemented. Additional
 integrations should remain server-side and expose only selected data through the
 versioned face protocol. Smart-home writes and arbitrary source transformations

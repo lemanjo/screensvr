@@ -121,10 +121,10 @@ export class Faces {
     if (face.builtin)
       throw new UserError("Bundled faces cannot be removed.", 409);
     if (
-      this.store.db.prepare("SELECT id FROM devices WHERE face_id = ?").get(id)
+      this.store.db.prepare("SELECT id FROM scenes WHERE face_id = ?").get(id)
     )
       throw new UserError(
-        "Switch all displays away from this face before removing it.",
+        "Remove or change every scene using this face before removing it.",
         409,
       );
     rmSync(path.join(this.directory, id, face.manifest.version), {

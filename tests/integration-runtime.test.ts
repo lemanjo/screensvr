@@ -80,11 +80,7 @@ beforeEach(async () => {
   store.db
     .prepare("INSERT INTO faces VALUES (?, ?, 0)")
     .run(face.id, JSON.stringify(face));
-  store.db
-    .prepare(
-      "INSERT INTO devices (id, slug, name, face_id, settings, timezone) VALUES ('room', 'room', 'Room', ?, '{}', 'UTC')",
-    )
-    .run(face.id);
+  store.createDevice("room", "room", "Room", face.id, {}, "UTC");
   integrations = new Integrations(store, directory, vi.fn(), factory);
   integrationId = randomUUID();
   store.db
@@ -141,11 +137,7 @@ it("shares concurrent discovery reads instead of requesting the full state repea
 });
 it("deduplicates sources and ignores stale subscription callbacks after rebinding", () => {
   const oldCallback = clients[0].callback!;
-  store.db
-    .prepare(
-      "INSERT INTO devices (id, slug, name, face_id, settings, timezone) VALUES ('second', 'second', 'Second', ?, '{}', 'UTC')",
-    )
-    .run(face.id);
+  store.createDevice("second", "second", "Second", face.id, {}, "UTC");
   store.replaceBindings("second", {
     temperature: { integrationId, sourceId: "sensor.room" },
   });

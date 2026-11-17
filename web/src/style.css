@@ -1117,7 +1117,57 @@ small {
 .display-shell {
   position: fixed;
   inset: 0;
-  background: #15231e;
+  background: #000;
+}
+.scene-manager {
+  padding: 24px;
+}
+.scene-manager > p,
+.schedule-editor > p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.scene-manager > label {
+  display: block;
+  margin: 18px 0;
+}
+.scene-actions,
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.scene-manager .editor-layout {
+  margin: 20px -24px -24px;
+}
+.schedule-editor {
+  display: grid;
+  gap: 16px;
+}
+.schedule-entry {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+.weekday-picker label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.weekday-picker input {
+  width: auto;
+}
+.device-footer {
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .display-message {
   min-height: 100dvh;
@@ -1128,7 +1178,8 @@ small {
   padding: 30px;
   text-align: center;
   gap: 15px;
-  background: #f1f4eb;
+  background: #000;
+  color: #aaa;
 }
 .display-message h1 {
   font-family: var(--serif);
@@ -1151,8 +1202,8 @@ small {
   position: fixed;
   bottom: 15px;
   left: 15px;
-  background: #15231ec9;
-  color: #c6d8ba;
+  background: #000c;
+  color: #666;
   border-radius: 5px;
   padding: 7px 10px;
   font-size: 10px;
@@ -1161,8 +1212,8 @@ small {
   position: fixed;
   bottom: 15px;
   right: 15px;
-  color: #d7dfd0;
-  background: #15231e88;
+  color: #888;
+  background: #0008;
   border-radius: 5px;
   width: 35px;
   height: 35px;

@@ -159,7 +159,9 @@ sessions, display settings, encrypted integration credentials, and their
 database. A missing/mismatched key disables integration access rather than
 silently replacing credentials.
 
-The integration update migrates SQLite to schema version 3. Older binaries cannot
+The scenes update migrates SQLite to schema version 4, moving existing display
+settings and data bindings into a Default scene with scheduling disabled.
+Older binaries cannot
 open that database. Back up before upgrading; rollback requires restoring the
 pre-upgrade data directory, not just starting an older container.
 
@@ -174,16 +176,16 @@ matching application version. Test restoration before relying on a backup.
 - A failed face renders a retry overlay. Switch to a bundled face in management
   if a package is broken.
 - Packages are trusted executable code. Do not expose installation to strangers.
-- One version per face ID is supported. Switch displays away, remove the old
-  package, then install the replacement.
+- One version per face ID is supported. Reassign or delete every scene using the
+  old face, including inactive scenes, then remove the package and install its replacement.
 - A crash during installation can leave `.staging-*` or an unreferenced reserved
   directory below `/data/faces`. They are not served. After stopping the server
   and checking the database, an operator may remove only those known orphan
   directories. Do not delete referenced face directories.
 - Home Assistant sensor readings are supported through server-side
   [integrations](integrations.md). Its URL must be reachable from the container.
-  Scheduling, registry downloads, multi-user permissions, and offline startup
-  are not implemented.
+  Weekly time-based scheduling is supported per display. Registry downloads,
+  multi-user permissions, and offline startup are not implemented.
 
 The `/api/health` endpoint reports process readiness. SSE connections and
 last-seen timestamps provide display status in management; they do not imply

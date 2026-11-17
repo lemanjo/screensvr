@@ -67,6 +67,6 @@ it("accepts same-origin setup through Vite without allowing cross-origin mutatio
   });
   expect(logout.status).toBe(200);
   expect(
-    (await fetch(`${origin}/faces/builtin-digital/1.1.0/index.html`)).status,
+    (await fetch(`${origin}/faces/builtin-digital/1.2.0/index.html`)).status,
   ).toBe(200);
 });

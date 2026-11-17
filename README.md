@@ -104,6 +104,40 @@ Use your server's network IP address or hostname in the tablet's link, not
 same even if you rename the display, and the tablet does not need an
 administrator login.
 
+### Schedule scenes
+
+Open a display's **Scenes & schedule** to save different looks. Each scene keeps
+its own face, settings, and data sources. Creating or editing an inactive scene
+does not change the live screen; switching back restores its saved selections.
+Scenes belong to one display, not a shared library.
+
+Under **Weekly schedule**, choose weekdays, a start time, and a scene. For example:
+
+| Days      | Start | Scene          |
+| --------- | ----- | -------------- |
+| Mon–Fri   | 07:00 | Daytime photos |
+| Sat–Sun   | 09:00 | Daytime photos |
+| Every day | 19:00 | Evening clock  |
+| Every day | 23:00 | Night clock    |
+
+Times use the display's timezone. A scene stays active until the next entry,
+including overnight and on days without entries. Enabling a schedule immediately
+selects the current scene. Disable scheduling before manually activating a scene;
+disabling keeps the scene currently on screen. Existing displays start with a
+**Default** scene and scheduling disabled.
+
+**Add night clock** creates a Slow Hours scene with a black background, dim
+numerals, and no glow, seconds, or decorative content. This changes the rendered
+page, not the tablet's backlight. Configure hardware brightness and screen power
+in Fully Kiosk or on the device.
+
+During daylight-saving spring-forward gaps, skipped entries apply at the clock
+jump, with the latest skipped start winning. During a repeated autumn hour,
+entries apply at their first occurrence only. Scheduling runs on the server:
+connected screens update automatically, and sleeping or disconnected screens
+resynchronize when they reconnect. A disconnected screen keeps its current face;
+offline scheduling and offline cold starts are not supported.
+
 ### Use it as a Fully Kiosk screensaver
 
 On your tablet, keep your usual dashboard as Fully Kiosk's **Start URL**. Then:

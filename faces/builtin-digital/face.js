@@ -7,7 +7,7 @@ function prepare() {
     timeZone: context.timezone,
     hour: "2-digit",
     minute: "2-digit",
-    ...(config.showSeconds ? { second: "2-digit" } : {}),
+    ...(config.showSeconds && !config.nightMode ? { second: "2-digit" } : {}),
     hour12: config.format === "12",
   });
   dateFormat = new Intl.DateTimeFormat(context.locale, {
@@ -32,6 +32,7 @@ function tick() {
 window.screensvr.onUpdate((update) => {
   config = update.config;
   context = update.context;
+  document.documentElement.dataset.night = String(config.nightMode === true);
   document.documentElement.style.setProperty("--accent", config.accent);
   document.documentElement.style.setProperty("--background", config.background);
   document.getElementById("caption").textContent = config.caption;

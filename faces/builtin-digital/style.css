@@ -92,3 +92,20 @@ main {
     animation: none;
   }
 }
+:root[data-night="true"] body {
+  background: #000;
+  color: #454545;
+}
+:root[data-night="true"] .glow,
+:root[data-night="true"] #date,
+:root[data-night="true"] #caption,
+:root[data-night="true"] .signature,
+:root[data-night="true"] #temperature {
+  display: none;
+}
+:root[data-night="true"] .glow {
+  animation: none;
+}
+:root[data-night="true"] #period {
+  color: #454545;
+}

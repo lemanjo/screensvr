@@ -18,6 +18,8 @@ import { Integrations } from "./integrations/manager.js";
 import { integrationRoutes } from "./integrations/routes.js";
 import type { ConnectorFactory } from "./integrations/connector.js";
 import { DisplayStates } from "./display-state.js";
+import { Scheduler } from "./scheduler.js";
+import { sceneConfiguration, sceneRoutes } from "./scenes.js";
 
 const passwordBody = z
   .object({ password: z.string().min(12).max(128) })
@@ -78,12 +80,16 @@ export type AppOptions = {
   trustProxy?: boolean;
   connectorFactory?: ConnectorFactory;
   photosDir?: string;
+  now?: () => number;
 };
 
 export async function createApp(options: AppOptions) {
   const root = options.rootDir ?? process.cwd();
   mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
-  const store = new Store(path.join(options.dataDir, "screensvr.sqlite"));
+  const store = new Store(
+    path.join(options.dataDir, "screensvr.sqlite"),
+    options.now,
+  );
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
   const events = new Events((id) => states.state(id));
   const integrations = new Integrations(
@@ -91,6 +97,12 @@ export async function createApp(options: AppOptions) {
     options.dataDir,
     (integrationId) => {
       for (const device of store.usage(integrationId)) {
+        if (
+          !Object.values(store.bindings(device.id)).some(
+            (binding) => binding.integrationId === integrationId,
+          )
+        )
+          continue;
         if (pending.has(device.id)) continue;
         const timer = setTimeout(() => {
           pending.delete(device.id);
@@ -103,7 +115,13 @@ export async function createApp(options: AppOptions) {
     options.connectorFactory,
     options.photosDir,
   );
-  const states = new DisplayStates(store, integrations);
+  const scheduler = new Scheduler(store, (ids) => {
+    integrations.reconcile();
+    for (const id of ids) events.publish(id, store);
+  });
+  const states = new DisplayStates(store, integrations, () =>
+    scheduler.reconcile(),
+  );
   const faces = new Faces(
     store,
     path.join(options.dataDir, "faces"),
@@ -177,6 +195,7 @@ export async function createApp(options: AppOptions) {
       .send({ error: "Something went wrong on the server." });
   });
   app.addHook("preClose", async () => {
+    scheduler.close();
     integrations.close();
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
@@ -288,19 +307,24 @@ export async function createApp(options: AppOptions) {
   );
 
   app.get("/api/devices", { preHandler: security.requireAdmin }, async () =>
-    store.devices().map((row) => ({
-      id: row.id,
-      displayUrl: `/display/${row.slug}`,
-      name: row.name,
-      timezone: row.timezone,
-      revision: row.revision,
-      faceId: row.face_id,
-      settings: JSON.parse(row.settings),
-      bindings: store.bindings(row.id),
-      data: states.state(row.id)!.data,
-      lastSeen: row.last_seen,
-      online: events.online(row.id),
-    })),
+    store.devices().map((row) => {
+      const state = states.state(row.id)!;
+      return {
+        ...sceneConfiguration(store, row.id),
+        id: row.id,
+        displayUrl: `/display/${row.slug}`,
+        name: row.name,
+        timezone: row.timezone,
+        revision: row.revision,
+        activeSceneId: state.sceneId,
+        faceId: state.face.id,
+        settings: state.settings,
+        bindings: store.sceneBindings(state.sceneId),
+        data: state.data,
+        lastSeen: row.last_seen,
+        online: events.online(row.id),
+      };
+    }),
   );
   app.post(
     "/api/devices",
@@ -311,18 +335,15 @@ export async function createApp(options: AppOptions) {
       if (!face) throw new UserError("Face not found.", 404);
       const id = randomUUID();
       const slug = store.availableSlug(input.name);
-      store.db
-        .prepare(
-          "INSERT INTO devices (id, slug, name, face_id, settings, timezone) VALUES (?, ?, ?, ?, ?, ?)",
-        )
-        .run(
-          id,
-          slug,
-          input.name,
-          input.faceId,
-          JSON.stringify(validateSettings(face.manifest, {})),
-          input.timezone,
-        );
+      store.createDevice(
+        id,
+        slug,
+        input.name,
+        input.faceId,
+        validateSettings(face.manifest, {}),
+        input.timezone,
+      );
+      scheduler.reconcile();
       return reply.code(201).send({ id, displayUrl: `/display/${slug}` });
     },
   );
@@ -338,25 +359,37 @@ export async function createApp(options: AppOptions) {
           "This display changed elsewhere. Reload its settings and try again.",
           409,
         );
-      const faceId = input.faceId ?? current.face_id;
+      if (
+        current.schedule_enabled &&
+        (input.faceId !== undefined ||
+          input.settings !== undefined ||
+          input.bindings !== undefined)
+      )
+        throw new UserError(
+          "Edit a specific scene while scheduling is enabled.",
+          409,
+        );
+      const sceneId = store.selection(current.id)!.sceneId;
+      const scene = store.scene(current.id, sceneId)!;
+      const faceId = input.faceId ?? scene.faceId;
       const face = store.face(faceId);
       if (!face) throw new UserError("Face not found.", 404);
       let settings;
       try {
         settings = validateSettings(
           face.manifest,
-          input.settings ??
-            (faceId === current.face_id ? JSON.parse(current.settings) : {}),
+          input.settings ?? (faceId === scene.faceId ? scene.settings : {}),
         );
       } catch (error) {
         throw new UserError((error as Error).message);
       }
-      const previous = store.bindings(current.id);
+      const previous = scene.bindings;
       const bindings = await integrations.validate(
         face.manifest,
-        input.bindings ?? (faceId === current.face_id ? previous : {}),
-        faceId === current.face_id ? previous : {},
+        input.bindings ?? (faceId === scene.faceId ? previous : {}),
+        faceId === scene.faceId ? previous : {},
         current.id,
+        sceneId,
       );
       // Validation can await upstream discovery; recheck after that await.
       if (store.device(current.id)?.revision !== input.revision)
@@ -368,23 +401,25 @@ export async function createApp(options: AppOptions) {
       try {
         store.db
           .prepare(
-            "UPDATE devices SET name = ?, timezone = ?, face_id = ?, settings = ?, revision = revision + 1 WHERE id = ?",
+            "UPDATE devices SET name = ?, timezone = ?, revision = revision + 1 WHERE id = ?",
           )
           .run(
             input.name ?? current.name,
             input.timezone ?? current.timezone,
-            faceId,
-            JSON.stringify(settings),
             current.id,
           );
-        store.replaceBindings(current.id, bindings);
-        integrations.checkLimits(bindings, current.id);
+        store.db
+          .prepare("UPDATE scenes SET face_id = ?, settings = ? WHERE id = ?")
+          .run(faceId, JSON.stringify(settings), sceneId);
+        store.replaceSceneBindings(sceneId, bindings);
+        integrations.checkLimits(bindings, current.id, sceneId);
         store.db.exec("COMMIT;");
       } catch (error) {
         store.db.exec("ROLLBACK;");
         throw error;
       }
       integrations.reconcile();
+      scheduler.reconcile();
       events.publish(current.id, store);
       return states.state(current.id);
     },
@@ -395,12 +430,23 @@ export async function createApp(options: AppOptions) {
     async (request) => {
       if (!store.device(request.params.id))
         throw new UserError("Display not found.", 404);
+      store.db.exec("BEGIN;");
+      try {
+        store.db
+          .prepare("DELETE FROM schedule_entries WHERE device_id = ?")
+          .run(request.params.id);
+        store.db
+          .prepare("DELETE FROM devices WHERE id = ?")
+          .run(request.params.id);
+        store.db.exec("COMMIT;");
+      } catch (error) {
+        store.db.exec("ROLLBACK;");
+        throw error;
+      }
       events.disconnect(request.params.id);
-      store.db
-        .prepare("DELETE FROM devices WHERE id = ?")
-        .run(request.params.id);
       states.forget(request.params.id);
       integrations.reconcile();
+      scheduler.reconcile();
       return { ok: true };
     },
   );
@@ -499,6 +545,12 @@ export async function createApp(options: AppOptions) {
   app.setNotFoundHandler((_request, reply) =>
     reply.code(404).send({ error: "Not found." }),
   );
+  sceneRoutes(app, store, integrations, security, (id) => {
+    scheduler.reconcile();
+    integrations.reconcile();
+    events.publish(id, store);
+  });
+  scheduler.reconcile();
   integrations.reconcile();
-  return { app, store, events, integrations, states };
+  return { app, store, events, integrations, states, scheduler };
 }

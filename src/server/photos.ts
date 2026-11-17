@@ -8,6 +8,8 @@ import type { PhotoConnector } from "./integrations/connector.js";
 export type PhotoScope = {
   deviceId: string;
   revision: number;
+  sceneId?: string;
+  activation?: string;
   preview?: boolean;
 };
 type Grant = {
@@ -73,7 +75,16 @@ export class Photos {
     )
       return;
     if (!grant.scope.preview) {
-      const binding = this.store.bindings(device.id)[grant.inputKey];
+      const selection = this.store.selection(device.id);
+      if (
+        !selection ||
+        selection.sceneId !== grant.scope.sceneId ||
+        selection.generation !== grant.scope.activation
+      )
+        return;
+      const binding = this.store.sceneBindings(selection.sceneId)[
+        grant.inputKey
+      ];
       if (
         binding?.integrationId !== grant.binding.integrationId ||
         binding.sourceId !== grant.binding.sourceId

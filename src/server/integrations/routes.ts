@@ -60,7 +60,11 @@ const test = z
   })
   .strict();
 const draft = z
-  .object({ faceId: z.string().max(64), bindings: bindingsSchema })
+  .object({
+    faceId: z.string().max(64),
+    bindings: bindingsSchema,
+    sceneId: z.string().max(64).optional(),
+  })
   .strict();
 
 export function integrationRoutes(
@@ -316,8 +320,12 @@ export function integrationRoutes(
       if (!device) throw new UserError("Display not found.", 404);
       const face = store.face(input.faceId);
       if (!face) throw new UserError("Face not found.", 404);
-      const previous =
-        input.faceId === device.face_id ? store.bindings(device.id) : {};
+      const scene = store.scene(
+        device.id,
+        input.sceneId ?? store.selection(device.id)!.sceneId,
+      );
+      if (!scene) throw new UserError("Scene not found on this display.", 404);
+      const previous = input.faceId === scene.faceId ? scene.bindings : {};
       const controller = new AbortController();
       const abort = () => {
         if (!reply.raw.writableEnded) controller.abort();
@@ -330,6 +338,7 @@ export function integrationRoutes(
           input.bindings,
           previous,
           device.id,
+          scene.id,
         );
         return {
           data: await integrations.preview(

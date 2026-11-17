@@ -223,13 +223,15 @@ export class Integrations {
     }
   }
   private selected(id: string) {
-    return (
-      this.store.db
-        .prepare(
-          "SELECT DISTINCT source_id FROM device_input_bindings WHERE integration_id = ? ORDER BY source_id",
-        )
-        .all(id) as { source_id: string }[]
-    ).map((row) => row.source_id);
+    return [
+      ...new Set(
+        this.store.activeBindings().flatMap(({ bindings }) =>
+          Object.values(bindings)
+            .filter((binding) => binding.integrationId === id)
+            .map((binding) => binding.sourceId),
+        ),
+      ),
+    ].sort();
   }
   private watch(id: string, runtime: Runtime) {
     const ids = this.selected(id);
@@ -361,6 +363,7 @@ export class Integrations {
     input: unknown,
     previous: Bindings = {},
     deviceId?: string,
+    sceneId?: string,
   ) {
     const bindings = bindingsSchema.parse(input);
     const inputs = manifest.schemaVersion !== 1 ? manifest.inputs : [];
@@ -390,10 +393,10 @@ export class Integrations {
           `Choose a compatible source for ${faceInput.label}.`,
         );
     }
-    this.checkLimits(bindings, deviceId);
+    this.checkLimits(bindings, deviceId, sceneId);
     return bindings;
   }
-  checkLimits(bindings: Bindings, deviceId?: string) {
+  checkLimits(bindings: Bindings, deviceId?: string, sceneId?: string) {
     for (const id of new Set(
       Object.values(bindings).map((binding) => binding.integrationId),
     )) {
@@ -401,9 +404,14 @@ export class Integrations {
         (
           this.store.db
             .prepare(
-              "SELECT source_id FROM device_input_bindings WHERE integration_id = ? AND device_id != ?",
+              "SELECT source_id FROM scene_input_bindings WHERE integration_id = ? AND scene_id != ?",
             )
-            .all(id, deviceId ?? "") as { source_id: string }[]
+            .all(
+              id,
+              sceneId ??
+                (deviceId ? this.store.selection(deviceId)?.sceneId : "") ??
+                "",
+            ) as { source_id: string }[]
         ).map((row) => row.source_id),
       );
       for (const binding of Object.values(bindings))
