@@ -20,7 +20,15 @@ export class DisplayStates {
       this.snapshots.delete(id);
       return;
     }
-    const data = this.integrations.data(base.face, this.store.bindings(id));
+    const data = this.integrations.data(
+      base.face,
+      this.store.bindings(id),
+      undefined,
+      {
+        deviceId: id,
+        revision: base.revision,
+      },
+    );
     const content = JSON.stringify({ ...base, data });
     const previous = this.snapshots.get(id);
     if (previous?.content === content) return previous.state;

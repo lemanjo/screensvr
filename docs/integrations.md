@@ -4,6 +4,74 @@ Integrations connect services to screensvr **on the server**. A face declares
 the kinds of data it can display; you choose a source separately for each display.
 The face controls where the reading appears and how it looks.
 
+## Mounted photo folders
+
+Connect a local directory or a NAS share already mounted on the server.
+screensvr does not mount SMB/NFS shares or manage NAS credentials.
+
+### Mount and connect
+
+Add a read-only bind mount to the screensvr service in your Compose file:
+
+```yaml
+volumes:
+  - screensvr-data:/data
+  - /mnt/nas/photos/screensvr:/photos:ro
+```
+
+For example, `/photos/family/` and `/photos/artwork/` become selectable folders.
+The container's unprivileged `node` user (UID 1000) needs read access to files and
+search access to directories. For Node.js deployments, set
+`SCREENSVR_PHOTOS_DIR=/your/photo/directory`; the default is `/photos`.
+
+1. Open **Integrations → Add integration**.
+2. Choose **Mounted photo folders** and give the connection a name.
+3. Optionally enter a relative folder such as `family` or `family/holidays`.
+   Leave it blank to use the whole configured photo directory. Do not enter a
+   host path, NAS address, or `/photos` here.
+4. Choose **Test connection**, then **Save integration**.
+5. Choose **Photo Hours** in a display's settings.
+6. Under **Data sources → Photos**, choose the connection and a folder or file.
+   Preview your selection, then **Save changes**.
+
+A folder includes its subfolders. Selecting an individual file keeps that image
+on screen instead of rotating through its neighbors. Photo Hours supports
+sequential or shuffled playback, an adjustable interval, fill/fit, and an
+optional clock. Other photo-capable faces choose their own layout.
+
+JPEG, PNG, and WebP are supported. Images are orientation-corrected, resized for
+the display, and served as JPEG without original EXIF metadata. HEIC, RAW, SVG,
+video, and animated playback are not supported. Transparent images are flattened.
+Hidden entries and symbolic links inside the photo root are excluded.
+
+### Refresh, limits, and privacy
+
+- Collections are rescanned approximately every 30 seconds while connected.
+  Changes to the selected folder/file update displays without changing their
+  settings. Folder scans include at most 10,000 entries and 16 nested levels;
+  choose a smaller folder if the scan limit is reached.
+- Files larger than 50 MiB and images above 40 megapixels are not served.
+  Corrupt/unsupported images produce an unavailable-image response.
+- Images are resized into bounded variants, up to 2560 pixels per dimension
+  without upscaling. The server keeps a shared in-memory cache capped at 32 MiB
+  and 128 variants; it does not copy the library into the data volume.
+- Missing mounts or permission errors reconnect automatically. Photo Hours
+  keeps its last loaded image during temporary failures; clocks keep running.
+  This is not an offline photo library or a guaranteed offline cold start.
+- Folder/file discovery requires administrator access. Image URLs are
+  short-lived capabilities limited to the selected collection and display or
+  administrator preview. They are rechecked on every request, including cache
+  hits. Unbinding, changing integration settings, disabling the connection,
+  or deleting the display revokes existing saved-display URLs.
+- **Selected photos are display content:** anyone who can reach a display URL
+  can access its selected photo collection, not just the currently visible
+  image. Preview links also grant temporary access to the previewed selection;
+  do not share them. Use a trusted network or reverse-proxy access controls.
+
+Only files inside the selected root are read, and the integration never writes
+to the source directory. Back up your original photos separately; they are not
+included in the screensvr data-volume backup.
+
 ## Home Assistant
 
 The read-only connector uses the filtered `subscribe_entities` WebSocket API

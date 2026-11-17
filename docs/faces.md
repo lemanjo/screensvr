@@ -125,6 +125,85 @@ or integration-specific API into your face.
 Design the layout and fallback behavior yourself. The host does not add widgets.
 See [Room Climate](../examples/room-climate/) for a complete v2 package.
 
+## Manifest v3: photos
+
+Use `"schemaVersion": 3` for photo-capable faces. It supports the existing scalar
+inputs plus an `image` input:
+
+```json
+{
+  "inputs": [
+    {
+      "key": "photos",
+      "label": "Photos",
+      "description": "A background image or rotating photo collection.",
+      "type": "image"
+    }
+  ]
+}
+```
+
+This is a manifest fragment. The administrator binds either a collection
+(currently a mounted folder) or a single image; a single image is a collection
+with one item. Faces never depend on the provider or receive filesystem paths,
+source IDs, credentials, or access to the rest of the library.
+
+An image datum uses the existing statuses and timestamps. Its ready/stale
+`value` contains `{ count, revision, url }`, rather than image bytes or a full
+file list. The SDK's photo helpers turn this into a loadable image URL.
+The freshness lease confirms source availability, not the age of the photograph.
+
+```js
+const stop = window.screensvr.photos.watch(
+  "photos",
+  (photo) => {
+    const image = document.getElementById("photo");
+    image.hidden = !photo;
+    if (photo) image.src = photo.url;
+    else image.removeAttribute("src");
+  },
+  { interval: 30000, shuffle: true },
+);
+// Call stop() to unsubscribe and cancel playback.
+```
+
+`watch` emits the initial image (or `null` if no source is usable), advances
+through collections, and updates when the selection, collection, or requested
+size changes. Unavailable/unbound data emits `null`. Stale data retains the
+current image but pauses rotation until the source is ready again. Repeated
+host updates do not restart the rotation interval. Shuffle avoids immediate
+repeats; a one-image source does not rotate.
+
+For explicit selection, use:
+
+```js
+window.screensvr.onUpdate(() => {
+  const photo = window.screensvr.photos.get("photos", {
+    index: 0,
+    width: 640,
+    height: 480,
+  });
+  // photo: { url, index, count, revision }, or null.
+});
+```
+
+Indices are zero-based and must be within the current collection. Dimensions
+must be positive finite numbers and are capped at 2560. They default to frame
+dimensions (1920×1080 when unknown); the server buckets requests into bounded
+sizes and preserves aspect ratio. Both helpers accept `width`/`height`; `watch`
+also accepts `interval` in milliseconds (1000–86400000) and `shuffle`.
+
+Use returned URLs in `<img>`, CSS backgrounds, or canvas. For canvas, set
+`image.crossOrigin = "anonymous"` **before** assigning `src`. The photo endpoint
+supports anonymous CORS, not administrator cookies. Faces still have no fetch
+or WebSocket access. URLs are temporary and must not be persisted or logged.
+Preload replacements and handle image errors without hiding the clock; the
+built-in [Photo Hours](../faces/builtin-photos/) face demonstrates this pattern.
+
+The SDK owns selection/playback helpers, not the layout. Faces control fit,
+crop, overlays, and transitions. No large library array or image bytes travel
+through the message bridge.
+
 ## SDK
 
 Load the host-provided SDK **before** your own script:
@@ -193,9 +272,9 @@ The transport is a MessageChannel transferred by the shell on iframe load.
 The SDK accepts the connection only from `parent`, replies `ready`, and receives
 `update` messages. Successful callbacks reply `applied`; thrown errors report
 `error`. Prefer the SDK over coupling directly to this transport.
-The host advertises protocols 1/2 and the SDK acknowledges its selected version.
+The host advertises protocols 1/2/3 and the SDK acknowledges its selected version.
 Legacy SDKs without a version acknowledgment use protocol 1; manifest-v2 faces
-require protocol 2.
+require protocol 2 or newer, and manifest-v3 faces require protocol 3.
 
 ## Frameworks and browser restrictions
 

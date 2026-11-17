@@ -11,7 +11,7 @@ RUN npm run build
 FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/lemanjo/screensvr"
 LABEL org.opencontainers.image.licenses="MIT"
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 SCREENSVR_DATA_DIR=/data
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 SCREENSVR_DATA_DIR=/data SCREENSVR_PHOTOS_DIR=/photos
 WORKDIR /app
 COPY LICENSE ./
 COPY package.json package-lock.json ./
@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-* \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-    && mkdir /data && chown node:node /data
+    && mkdir /data /photos && chown node:node /data
 COPY --from=build /app/dist ./dist
 COPY faces ./faces
 USER node

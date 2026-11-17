@@ -129,7 +129,7 @@ kiosk app, not by screensvr.
 
 ## Included screen faces
 
-Five clock faces are ready to use. These screenshots show their default settings.
+Six faces are ready to use. These screenshots show the original clock designs.
 Each face has its own options for colors, clock style, or animation.
 
 | Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
@@ -146,6 +146,11 @@ ambient movement respects reduced-motion preferences. Choose a Home Assistant
 sensor under the display's **Data sources → Room temperature** settings.
 
 ![Stillroom: warm serif clock numerals and a room-temperature reading on a dark charcoal-green background](docs/images/stillroom.png)
+
+**Photo Hours** shows a selected photo or a slideshow from a mounted directory,
+with an optional clock. Choose its photos under the display's **Data sources**
+settings. See [mounted photo setup](docs/integrations.md#mounted-photo-folders)
+for the optional read-only Docker/NAS mount.
 
 ## Add more faces
 

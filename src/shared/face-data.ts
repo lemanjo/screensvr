@@ -11,7 +11,7 @@ const base = {
   label: z.string().min(1).max(80),
   description: z.string().max(200).optional(),
 };
-export const inputSchema = z.discriminatedUnion("type", [
+export const scalarInputSchema = z.discriminatedUnion("type", [
   z
     .object({
       ...base,
@@ -21,6 +21,10 @@ export const inputSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ ...base, type: z.literal("boolean") }).strict(),
   z.object({ ...base, type: z.literal("text") }).strict(),
+]);
+export const inputSchema = z.union([
+  scalarInputSchema,
+  z.object({ ...base, type: z.literal("image") }).strict(),
 ]);
 export type FaceInput = z.infer<typeof inputSchema>;
 // Zod deliberately strips __proto__ while parsing records. Reject it before
@@ -59,15 +63,28 @@ export const bindingsSchema = safeObject
 export type Bindings = z.infer<typeof bindingsSchema>;
 
 const timestamp = z.number().int().nonnegative().nullable();
+export const photoValueSchema = z
+  .object({
+    count: z.number().int().min(1).max(10000),
+    revision: z.string().regex(/^[a-f0-9]{64}$/),
+    // null is used internally, before granting scoped image access.
+    url: z
+      .string()
+      .regex(/^\/api\/photos\/[A-Za-z0-9_-]{32}$/)
+      .nullable(),
+  })
+  .strict();
+export type PhotoValue = z.infer<typeof photoValueSchema>;
 export const datumSchema = z
   .object({
-    type: z.enum(["number", "boolean", "text"]),
+    type: z.enum(["number", "boolean", "text", "image"]),
     quantity: z.enum(["temperature", "humidity"]).optional(),
     status: z.enum(["unbound", "loading", "ready", "unavailable", "stale"]),
     value: z.union([
       z.number().finite(),
       z.boolean(),
       z.string().max(200),
+      photoValueSchema,
       z.null(),
     ]),
     unit: z.string().max(32).nullable(),
@@ -79,9 +96,11 @@ export const datumSchema = z
   .superRefine((datum, context) => {
     const valued = datum.status === "ready" || datum.status === "stale";
     const validType =
-      datum.type === "text"
-        ? typeof datum.value === "string"
-        : typeof datum.value === datum.type;
+      datum.type === "image"
+        ? photoValueSchema.safeParse(datum.value).success
+        : datum.type === "text"
+          ? typeof datum.value === "string"
+          : typeof datum.value === datum.type;
     if (
       (valued &&
         (!validType ||
@@ -127,6 +146,7 @@ export type Source = {
   quantity?: "temperature" | "humidity";
   unit: string | null;
   available: boolean;
+  kind?: "folder" | "file";
 };
 export function compatible(input: FaceInput, source: Source) {
   return (
@@ -137,11 +157,9 @@ export function compatible(input: FaceInput, source: Source) {
   );
 }
 
-export type Integration = {
+type IntegrationBase = {
   id: string;
-  type: "home-assistant";
   name: string;
-  baseUrl: string;
   enabled: boolean;
   revision: number;
   hasCredentials: boolean;
@@ -155,3 +173,8 @@ export type Integration = {
   error: string | null;
   usage: { id: string; name: string }[];
 };
+export type Integration = IntegrationBase &
+  (
+    | { type: "home-assistant"; baseUrl: string }
+    | { type: "mounted-folder"; folder: string }
+  );

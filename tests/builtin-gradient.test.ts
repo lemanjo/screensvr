@@ -115,7 +115,7 @@ it.each(variants)(
     await server.app.close();
     server = await createApp({ dataDir });
 
-    expect(server.store.faces()).toHaveLength(5);
+    expect(server.store.faces()).toHaveLength(6);
     expect(
       (await server.app.inject(`/api${displayUrl}/state`)).json(),
     ).toMatchObject({

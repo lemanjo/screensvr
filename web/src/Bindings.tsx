@@ -67,7 +67,7 @@ function BindingField({
     { value: "", label: "Not connected" },
     ...matching.map((source) => ({
       value: source.id,
-      label: `${source.label} (${source.id})${source.available ? "" : " — unavailable"}`,
+      label: `${source.label}${input.type === "image" ? "" : ` (${source.id})`}${source.available ? "" : " — unavailable"}`,
     })),
   ];
   if (binding && !matching.some((source) => source.id === binding.sourceId))
@@ -84,10 +84,16 @@ function BindingField({
         value={integrationId}
         options={[
           { value: "", label: "Not connected" },
-          ...integrations.map((integration) => ({
-            value: integration.id,
-            label: `${integration.name}${integration.enabled ? "" : " — disabled"}`,
-          })),
+          ...integrations
+            .filter((integration) =>
+              input.type === "image"
+                ? integration.type === "mounted-folder"
+                : integration.type === "home-assistant",
+            )
+            .map((integration) => ({
+              value: integration.id,
+              label: `${integration.name}${integration.enabled ? "" : " — disabled"}`,
+            })),
         ]}
         onChange={(value) => {
           setIntegrationId(value);
@@ -98,7 +104,7 @@ function BindingField({
       />
       {integrationId && (
         <Select
-          label={`${input.label} sensor`}
+          label={`${input.label} ${input.type === "image" ? "photo source" : "sensor"}`}
           value={binding?.sourceId ?? ""}
           searchable
           onSearch={(value) => {
@@ -119,7 +125,9 @@ function BindingField({
       )}
       {!loading && !error && integrationId && !matching.length && (
         <small>
-          No compatible sensors found. Search by friendly name or entity ID.
+          {input.type === "image"
+            ? "No photos found. Check the folder mount or search by folder/file name."
+            : "No compatible sensors found. Search by friendly name or entity ID."}
         </small>
       )}
       {total > limit && (
@@ -151,7 +159,7 @@ export function BindingFields({
   integrations: Integration[];
   onChange: (value: Bindings) => void;
 }) {
-  if (face.schemaVersion !== 2 || !face.inputs.length) return null;
+  if (face.schemaVersion === 1 || !face.inputs.length) return null;
   return (
     <section className="binding-fields">
       <div className="form-divider" />
@@ -162,8 +170,8 @@ export function BindingFields({
       </p>
       {!integrations.length && (
         <p>
-          Add a Home Assistant connection on the Integrations page, then return
-          here to choose a sensor.
+          Add a connection on the Integrations page, then return here to choose
+          a source.
         </p>
       )}
       {face.inputs.map((input) => (
@@ -196,7 +204,8 @@ export function useDataPreview(
     error?: string;
   }>();
   useEffect(() => {
-    if (face?.schemaVersion !== 2 || !Object.keys(bindings).length) return;
+    if (!face || face.schemaVersion === 1 || !Object.keys(bindings).length)
+      return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {

@@ -1,4 +1,4 @@
-/* screensvr face protocols v1/v2. No framework or build step required. */
+/* screensvr face protocols v1/v2/v3. No framework or build step required. */
 (() => {
   let port;
   let latest;
@@ -51,22 +51,129 @@
     if (next !== Infinity)
       timer = setTimeout(expire, Math.max(1, Math.min(2147483647, next - now)));
   }
-  window.screensvr = Object.freeze({
-    onUpdate(callback) {
-      expire();
-      listeners.add(callback);
-      if (latest) {
-        try {
-          callback(latest);
-        } catch {
-          port?.postMessage({
-            type: "error",
-            message: "The face could not apply its update.",
-          });
-        }
+  function onUpdate(callback) {
+    expire();
+    listeners.add(callback);
+    if (latest) {
+      try {
+        callback(latest);
+      } catch {
+        port?.postMessage({
+          type: "error",
+          message: "The face could not apply its update.",
+        });
       }
-      return () => listeners.delete(callback);
-    },
+    }
+    return () => listeners.delete(callback);
+  }
+  function getPhoto(key, options = {}) {
+    const datum = latest?.data[key];
+    const value = datum?.value;
+    if (
+      datum?.type !== "image" ||
+      !["ready", "stale"].includes(datum.status) ||
+      !value?.url ||
+      !/^\/api\/photos\/[A-Za-z0-9_-]{32}$/.test(value.url)
+    )
+      return null;
+    const index = options.index ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index >= value.count)
+      throw new RangeError("Choose an image index inside this collection.");
+    const dimension = (value) => {
+      if (!Number.isFinite(value) || value <= 0)
+        throw new RangeError(
+          "Photo dimensions must be positive finite numbers.",
+        );
+      return Math.min(2560, Math.ceil(value));
+    };
+    const width = dimension(options.width ?? (latest.context.width || 1920));
+    const height = dimension(options.height ?? (latest.context.height || 1080));
+    return freeze({
+      url: `${value.url}?index=${index}&width=${width}&height=${height}&v=${value.revision}`,
+      index,
+      count: value.count,
+      revision: value.revision,
+    });
+  }
+  function watchPhotos(key, callback, options = {}) {
+    const interval = options.interval ?? 30000;
+    if (!Number.isFinite(interval) || interval < 1000 || interval > 86400000)
+      throw new RangeError(
+        "Photo interval must be between 1000 and 86400000 milliseconds.",
+      );
+    let index = 0;
+    let revision;
+    let previous;
+    let rotation;
+    let stopped = false;
+    function emit() {
+      const photo = getPhoto(key, { ...options, index });
+      const signature = photo?.url ?? null;
+      if (signature !== previous) {
+        previous = signature;
+        callback(photo);
+      }
+    }
+    function schedule() {
+      const datum = latest?.data[key];
+      if (
+        stopped ||
+        rotation ||
+        datum?.type !== "image" ||
+        datum.status !== "ready" ||
+        !datum.value ||
+        datum.value.count < 2
+      )
+        return;
+      rotation = setTimeout(() => {
+        rotation = undefined;
+        expire();
+        const count = latest?.data[key]?.value?.count;
+        if (!stopped && count > 1 && latest.data[key].status === "ready") {
+          index = options.shuffle
+            ? (index + 1 + Math.floor(Math.random() * (count - 1))) % count
+            : (index + 1) % count;
+          try {
+            emit();
+          } catch {
+            port?.postMessage({
+              type: "error",
+              message: "The face could not display its photo.",
+            });
+          }
+        }
+        schedule();
+      }, interval);
+    }
+    const unsubscribe = onUpdate(() => {
+      const datum = latest.data[key];
+      const value =
+        datum?.type === "image" && ["ready", "stale"].includes(datum.status)
+          ? datum.value
+          : null;
+      if (value?.revision !== revision) {
+        revision = value?.revision;
+        index =
+          options.shuffle && value
+            ? Math.floor(Math.random() * value.count)
+            : 0;
+      }
+      if (!value || datum.status !== "ready") {
+        clearTimeout(rotation);
+        rotation = undefined;
+      }
+      emit();
+      schedule();
+    });
+    return () => {
+      stopped = true;
+      unsubscribe();
+      clearTimeout(rotation);
+    };
+  }
+  window.screensvr = Object.freeze({
+    onUpdate,
+    photos: Object.freeze({ get: getPhoto, watch: watchPhotos }),
   });
   window.addEventListener("message", (event) => {
     if (
@@ -76,11 +183,9 @@
     )
       return;
     const offered = event.data.protocols ?? [1];
-    const protocolVersion = offered.includes(2)
-      ? 2
-      : offered.includes(1)
-        ? 1
-        : 0;
+    const protocolVersion = [3, 2, 1].find((version) =>
+      offered.includes(version),
+    );
     if (!protocolVersion) return;
     port?.close();
     clearTimeout(timer);
@@ -91,7 +196,7 @@
       latest = freeze({
         config: data.config,
         context: data.context,
-        data: protocolVersion === 2 ? (data.data ?? {}) : {},
+        data: protocolVersion >= 2 ? (data.data ?? {}) : {},
       });
       // Expire before notifying so an already-expired snapshot is never fresh.
       const now = Date.now();

@@ -77,6 +77,7 @@ export type AppOptions = {
   logger?: boolean;
   trustProxy?: boolean;
   connectorFactory?: ConnectorFactory;
+  photosDir?: string;
 };
 
 export async function createApp(options: AppOptions) {
@@ -100,6 +101,7 @@ export async function createApp(options: AppOptions) {
       }
     },
     options.connectorFactory,
+    options.photosDir,
   );
   const states = new DisplayStates(store, integrations);
   const faces = new Faces(
@@ -227,6 +229,44 @@ export async function createApp(options: AppOptions) {
     store.faces(),
   );
   integrationRoutes(app, store, integrations, security);
+  app.get<{ Params: { token: string } }>(
+    "/api/photos/:token",
+    {
+      // These URLs are temporary bearer capabilities, not ordinary log-safe paths.
+      logLevel: "silent",
+      config: {
+        rateLimit: { max: 120, timeWindow: "1 minute", groupId: "photos" },
+      },
+    },
+    async (request, reply) => {
+      const token = z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{32}$/)
+        .parse(request.params.token);
+      const query = z
+        .object({
+          index: z.coerce.number().int().min(0).max(9999).default(0),
+          width: z.coerce.number().int().min(1).max(2560).default(1920),
+          height: z.coerce.number().int().min(1).max(2560).default(1080),
+          v: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
+        })
+        .strict()
+        .parse(request.query);
+      const bytes = await integrations.photos.image(
+        token,
+        query.index,
+        query.width,
+        query.height,
+      );
+      reply.header("Cache-Control", "no-store");
+      // Anonymous CORS permits canvas use inside the opaque-origin sandbox.
+      reply.header("Access-Control-Allow-Origin", "*");
+      return reply.type("image/jpeg").send(bytes);
+    },
+  );
   app.post(
     "/api/faces",
     { preHandler: security.requireAdmin },

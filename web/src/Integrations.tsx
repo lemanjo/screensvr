@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import type { Integration } from "../../src/shared/face-data.js";
 import { api, errorMessage } from "./api.js";
 import { Dialog } from "./Dialog.js";
+import { Select } from "./Select.js";
 
 function IntegrationEditor({
   integration,
@@ -13,7 +14,15 @@ function IntegrationEditor({
   onSaved: () => Promise<void>;
 }) {
   const [name, setName] = useState(integration?.name ?? "Home Assistant");
-  const [baseUrl, setBaseUrl] = useState(integration?.baseUrl ?? "");
+  const [type, setType] = useState<Integration["type"]>(
+    integration?.type ?? "home-assistant",
+  );
+  const [baseUrl, setBaseUrl] = useState(
+    integration?.type === "home-assistant" ? integration.baseUrl : "",
+  );
+  const [folder, setFolder] = useState(
+    integration?.type === "mounted-folder" ? integration.folder : "",
+  );
   const [token, setToken] = useState("");
   const [enabled, setEnabled] = useState(integration?.enabled ?? true);
   const [busy, setBusy] = useState(false);
@@ -31,8 +40,10 @@ function IntegrationEditor({
         {
           method: "POST",
           body: JSON.stringify({
-            baseUrl,
-            ...(token ? { token: token.trim() } : {}),
+            ...(integration ? {} : { type }),
+            ...(type === "mounted-folder"
+              ? { folder }
+              : { baseUrl, ...(token ? { token: token.trim() } : {}) }),
           }),
         },
       );
@@ -56,13 +67,13 @@ function IntegrationEditor({
         {
           method: integration ? "PATCH" : "POST",
           body: JSON.stringify({
-            ...(integration
-              ? { revision: integration.revision }
-              : { type: "home-assistant" }),
+            ...(integration ? { revision: integration.revision } : { type }),
             name,
-            baseUrl,
+            ...(type === "mounted-folder" ? { folder } : { baseUrl }),
             enabled,
-            ...(token ? { token: token.trim() } : {}),
+            ...(type === "home-assistant" && token
+              ? { token: token.trim() }
+              : {}),
           }),
         },
       );
@@ -76,16 +87,39 @@ function IntegrationEditor({
   }
   return (
     <Dialog
-      title={integration ? "Edit Home Assistant" : "Connect Home Assistant"}
+      title={
+        integration
+          ? `Edit ${type === "mounted-folder" ? "mounted folders" : "Home Assistant"}`
+          : "Add integration"
+      }
       onClose={onClose}
     >
       <form
         className="dialog-body integration-form"
         onSubmit={(event) => void save(event)}
       >
+        {!integration && (
+          <Select
+            label="Integration type"
+            value={type}
+            options={[
+              { value: "home-assistant", label: "Home Assistant" },
+              { value: "mounted-folder", label: "Mounted photo folders" },
+            ]}
+            onChange={(value) => {
+              setType(value as Integration["type"]);
+              setName(
+                value === "mounted-folder" ? "Photo folders" : "Home Assistant",
+              );
+              setError("");
+              setNotice("");
+            }}
+          />
+        )}
         <p>
-          Connect once, then choose which sensors each display receives. Faces
-          never receive your access token.
+          {type === "mounted-folder"
+            ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
+            : "Connect once, then choose which sensors each display receives. Faces never receive your access token."}
         </p>
         <label>
           Connection name
@@ -96,43 +130,65 @@ function IntegrationEditor({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <label>
-          Home Assistant URL
-          <input
-            required
-            type="url"
-            maxLength={2048}
-            placeholder="http://homeassistant.local:8123"
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-        </label>
-        {baseUrl.startsWith("http:") && (
-          <p className="integration-warning">
-            HTTP sends your token without encryption. Use it only on a trusted
-            network; prefer HTTPS.
-          </p>
+        {type === "mounted-folder" ? (
+          <>
+            <label>
+              Folder inside photo directory
+              <input
+                maxLength={200}
+                placeholder="e.g. family (blank for all folders)"
+                value={folder}
+                onChange={(event) => setFolder(event.target.value)}
+              />
+            </label>
+            <small>
+              Mount your photos read-only at /photos in Docker. Use a relative
+              folder here, not a NAS address or host path. Subfolders are
+              included. JPEG, PNG, and WebP are supported.
+            </small>
+          </>
+        ) : (
+          <>
+            <label>
+              Home Assistant URL
+              <input
+                required
+                type="url"
+                maxLength={2048}
+                placeholder="http://homeassistant.local:8123"
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+              />
+            </label>
+            {baseUrl.startsWith("http:") && (
+              <p className="integration-warning">
+                HTTP sends your token without encryption. Use it only on a
+                trusted network; prefer HTTPS.
+              </p>
+            )}
+            <label>
+              Long-lived access token
+              <input
+                type="password"
+                autoComplete="new-password"
+                spellCheck={false}
+                required={!integration}
+                maxLength={4096}
+                value={token}
+                placeholder={
+                  integration ? "Leave blank to keep the saved token" : ""
+                }
+                onChange={(event) => setToken(event.target.value)}
+              />
+            </label>
+            <small>
+              Create a long-lived access token in your Home Assistant profile
+              under Security. Prefer a dedicated, least-privilege account.
+              screensvr only reads data, but the token may permit other
+              operations.
+            </small>
+          </>
         )}
-        <label>
-          Long-lived access token
-          <input
-            type="password"
-            autoComplete="new-password"
-            spellCheck={false}
-            required={!integration}
-            maxLength={4096}
-            value={token}
-            placeholder={
-              integration ? "Leave blank to keep the saved token" : ""
-            }
-            onChange={(event) => setToken(event.target.value)}
-          />
-        </label>
-        <small>
-          Create a long-lived access token in your Home Assistant profile under
-          Security. Prefer a dedicated, least-privilege account. screensvr only
-          reads data, but the token may permit other operations.
-        </small>
         <label className="toggle-field">
           <span>Enabled</span>
           <input
@@ -157,7 +213,11 @@ function IntegrationEditor({
           <button
             type="button"
             className="secondary"
-            disabled={busy || !baseUrl || (!integration && !token)}
+            disabled={
+              busy ||
+              (type === "home-assistant" &&
+                (!baseUrl || (!integration && !token)))
+            }
             onClick={() => void test()}
           >
             Test connection
@@ -236,11 +296,11 @@ export function IntegrationsPage({
           <div>
             <h2>A connection to your home.</h2>
             <p>
-              Add Home Assistant, then connect a temperature sensor in a
-              display’s settings.
+              Add Home Assistant or mounted photo folders, then choose a source
+              in a display’s settings.
             </p>
             <button className="primary" onClick={() => setEditing(null)}>
-              Connect Home Assistant
+              Add your first integration
             </button>
           </div>
         </section>
@@ -256,7 +316,11 @@ export function IntegrationsPage({
                 {statusLabels[integration.status]}
               </span>
             </div>
-            <p className="muted">Home Assistant · {integration.baseUrl}</p>
+            <p className="muted">
+              {integration.type === "home-assistant"
+                ? `Home Assistant · ${integration.baseUrl}`
+                : `Mounted photos · ${integration.folder || "All folders"}`}
+            </p>
             {integration.error && <p className="error">{integration.error}</p>}
             <div className="integration-usage">
               <small>

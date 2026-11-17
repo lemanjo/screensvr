@@ -4,7 +4,7 @@ import type { Datum, FaceData } from "../../src/shared/face-data.js";
 // This is deliberately lightweight: display bundles must not import Zod or
 // management code. The server is the authoritative contract validator.
 export function frameData(face: FaceManifest, data?: FaceData): FaceData {
-  if (face.schemaVersion !== 2) return {};
+  if (face.schemaVersion === 1) return {};
   return Object.fromEntries(
     face.inputs.map((input) => {
       const empty: Datum = {
@@ -43,10 +43,20 @@ export function frameData(face: FaceManifest, data?: FaceData): FaceData {
             value.expiresAt !== null &&
             (input.type === "number"
               ? typeof value.value === "number" && Number.isFinite(value.value)
-              : input.type === "boolean"
-                ? typeof value.value === "boolean"
-                : typeof value.value === "string" &&
-                  value.value.length <= 200) &&
+              : input.type === "image"
+                ? value.value !== null &&
+                  typeof value.value === "object" &&
+                  Number.isInteger(value.value.count) &&
+                  value.value.count > 0 &&
+                  value.value.count <= 10000 &&
+                  typeof value.value.revision === "string" &&
+                  /^[a-f0-9]{64}$/.test(value.value.revision) &&
+                  typeof value.value.url === "string" &&
+                  /^\/api\/photos\/[A-Za-z0-9_-]{32}$/.test(value.value.url)
+                : input.type === "boolean"
+                  ? typeof value.value === "boolean"
+                  : typeof value.value === "string" &&
+                    value.value.length <= 200) &&
             (value.quantity !== "temperature" ||
               ["°C", "°F", "K"].includes(value.unit ?? "")) &&
             (value.quantity !== "humidity" || value.unit === "%")
@@ -59,7 +69,16 @@ export function frameData(face: FaceManifest, data?: FaceData): FaceData {
           type: value.type,
           ...(value.quantity ? { quantity: value.quantity } : {}),
           status: value.status,
-          value: value.value,
+          value:
+            input.type === "image" &&
+            value.value &&
+            typeof value.value === "object"
+              ? {
+                  count: value.value.count,
+                  revision: value.value.revision,
+                  url: value.value.url,
+                }
+              : value.value,
           unit: value.unit,
           updatedAt: value.updatedAt,
           observedAt: value.observedAt,

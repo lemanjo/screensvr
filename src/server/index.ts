@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 
 const { app } = await createApp({
   dataDir: path.resolve(process.env.SCREENSVR_DATA_DIR ?? "data"),
+  photosDir: path.resolve(process.env.SCREENSVR_PHOTOS_DIR ?? "/photos"),
   secureCookies: process.env.SCREENSVR_SECURE_COOKIES === "true",
   trustProxy: process.env.SCREENSVR_TRUST_PROXY === "true",
   origin: process.env.SCREENSVR_ORIGIN,

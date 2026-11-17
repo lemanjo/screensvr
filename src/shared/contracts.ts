@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { inputSchema, type Bindings, type FaceData } from "./face-data.js";
+import {
+  inputSchema,
+  scalarInputSchema,
+  type Bindings,
+  type FaceData,
+} from "./face-data.js";
 
 const key = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/);
 const base = { key, label: z.string().min(1).max(80) };
@@ -66,13 +71,20 @@ export const manifestSchema = z
       .object({
         ...manifestFields,
         schemaVersion: z.literal(2),
+        inputs: z.array(scalarInputSchema).max(16),
+      })
+      .strict(),
+    z
+      .object({
+        ...manifestFields,
+        schemaVersion: z.literal(3),
         inputs: z.array(inputSchema).max(16),
       })
       .strict(),
   ])
   .superRefine((manifest, context) => {
     if (
-      manifest.schemaVersion === 2 &&
+      manifest.schemaVersion !== 1 &&
       new Set(manifest.inputs.map((input) => input.key)).size !==
         manifest.inputs.length
     )
