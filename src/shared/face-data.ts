@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  isForecastValue,
+  weatherConditions,
+  type ForecastPeriod,
+} from "./weather.js";
 
 export const safeKey = z
   .string()
@@ -26,7 +31,18 @@ export const inputSchema = z.union([
   scalarInputSchema,
   z.object({ ...base, type: z.literal("image") }).strict(),
 ]);
-export type FaceInput = z.infer<typeof inputSchema>;
+export const weatherInputSchema = z.union([
+  inputSchema,
+  z.object({ ...base, type: z.literal("weather") }).strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("forecast"),
+      period: z.enum(["daily", "hourly"]),
+    })
+    .strict(),
+]);
+export type FaceInput = z.infer<typeof weatherInputSchema>;
 // Zod deliberately strips __proto__ while parsing records. Reject it before
 // parsing so unsafe submitted keys cannot silently disappear.
 const safeObject = z.unknown().superRefine((value, context) => {
@@ -75,16 +91,43 @@ export const photoValueSchema = z
   })
   .strict();
 export type PhotoValue = z.infer<typeof photoValueSchema>;
+export const weatherValueSchema = z
+  .object({
+    temperature: z.number().finite().nullable(),
+    condition: z.enum(weatherConditions).nullable(),
+  })
+  .strict()
+  .refine((value) => value.temperature !== null || value.condition !== null);
+export const forecastValueSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            at: z.number().int().nonnegative(),
+            temperature: z.number().finite().nullable(),
+            low: z.number().finite().nullable(),
+            condition: z.enum(weatherConditions).nullable(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(24),
+  })
+  .strict();
 export const datumSchema = z
   .object({
-    type: z.enum(["number", "boolean", "text", "image"]),
+    type: z.enum(["number", "boolean", "text", "image", "weather", "forecast"]),
     quantity: z.enum(["temperature", "humidity"]).optional(),
+    period: z.enum(["daily", "hourly"]).optional(),
     status: z.enum(["unbound", "loading", "ready", "unavailable", "stale"]),
     value: z.union([
       z.number().finite(),
       z.boolean(),
       z.string().max(200),
       photoValueSchema,
+      weatherValueSchema,
+      forecastValueSchema,
       z.null(),
     ]),
     unit: z.string().max(32).nullable(),
@@ -98,15 +141,35 @@ export const datumSchema = z
     const validType =
       datum.type === "image"
         ? photoValueSchema.safeParse(datum.value).success
-        : datum.type === "text"
-          ? typeof datum.value === "string"
-          : typeof datum.value === datum.type;
+        : datum.type === "weather"
+          ? weatherValueSchema.safeParse(datum.value).success
+          : datum.type === "forecast"
+            ? Boolean(
+                datum.period && isForecastValue(datum.value, datum.period),
+              )
+            : datum.type === "text"
+              ? typeof datum.value === "string"
+              : typeof datum.value === datum.type;
+    const weatherTemperatures =
+      valued &&
+      ((datum.type === "weather" &&
+        weatherValueSchema.safeParse(datum.value).data?.temperature !== null) ||
+        (datum.type === "forecast" &&
+          forecastValueSchema
+            .safeParse(datum.value)
+            .data?.entries.some(
+              (entry) => entry.temperature !== null || entry.low !== null,
+            )));
     if (
       (valued &&
         (!validType ||
           datum.observedAt === null ||
           datum.expiresAt === null)) ||
       (!valued && datum.value !== null) ||
+      (datum.type === "forecast"
+        ? !datum.period
+        : datum.period !== undefined) ||
+      (weatherTemperatures && !["°C", "°F", "K"].includes(datum.unit ?? "")) ||
       (datum.quantity && datum.type !== "number") ||
       (datum.quantity === "temperature" &&
         valued &&
@@ -130,6 +193,7 @@ export function emptyDatum(
     ...(input.type === "number" && input.quantity
       ? { quantity: input.quantity }
       : {}),
+    ...(input.type === "forecast" ? { period: input.period } : {}),
     status,
     value: null,
     unit: null,
@@ -144,6 +208,7 @@ export type Source = {
   label: string;
   type: FaceInput["type"];
   quantity?: "temperature" | "humidity";
+  period?: ForecastPeriod;
   unit: string | null;
   available: boolean;
   kind?: "folder" | "file" | "album";
@@ -151,6 +216,7 @@ export type Source = {
 export function compatible(input: FaceInput, source: Source) {
   return (
     input.type === source.type &&
+    (input.type !== "forecast" || input.period === source.period) &&
     (input.type !== "number" ||
       !input.quantity ||
       input.quantity === source.quantity)

@@ -8,7 +8,14 @@ export class ConnectorError extends Error {
     super(message);
   }
 }
-export type Reading = { source: Source; reading: Datum };
+export type Reading = {
+  source: Source;
+  reading: Datum;
+  // Internal ceiling: connection health cannot renew a forecast indefinitely.
+  validUntil?: number;
+  // A transient forecast failure must not erase a previous connection's value.
+  retainPrevious?: boolean;
+};
 export type Watch = { ready: Promise<void>; close(): void };
 export interface Connector {
   discover(): Promise<Source[]>;

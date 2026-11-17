@@ -163,7 +163,7 @@ kiosk app, not by screensvr.
 
 ## Included screen faces
 
-Six faces are ready to use. These screenshots show the original clock designs.
+Seven faces are ready to use. These screenshots show the original clock designs.
 Each face has its own options for colors, clock style, or animation.
 
 | Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
@@ -180,6 +180,14 @@ ambient movement respects reduced-motion preferences. Choose a Home Assistant
 sensor under the display's **Data sources → Room temperature** settings.
 
 ![Stillroom: warm serif clock numerals and a room-temperature reading on a dark charcoal-green background](docs/images/stillroom.png)
+
+**Weather Hours** pairs a quiet clock with current weather and a compact daily
+or hourly forecast. Subtle rain, drifting snow, and soft clouds follow fresh
+current conditions; stale or missing weather returns to a neutral background.
+Weather animation can be disabled and respects reduced-motion preferences.
+Choose a Home Assistant weather entity under **Data sources**, then select
+**Next three days** or **Next six hours** in **Forecast view**.
+See [weather setup](docs/integrations.md#weather).
 
 **Photo Hours** shows a selected photo or a slideshow from a mounted directory
 or an **Immich album**, with an optional clock. Choose its photos under the
@@ -204,7 +212,9 @@ the [framework-free example](examples/paper/).
 
 Add a **Home Assistant** connection under **Integrations**, then select a sensor
 in a display's **Data sources** settings. Slow Hours and Stillroom can show a room
-temperature; other faces can declare numeric, humidity, boolean, or text inputs.
+temperature; Weather Hours uses weather entities for current conditions and
+daily/hourly forecasts. Other faces can declare numeric, humidity, boolean, text,
+photo, or structured weather inputs.
 Faces receive only the selected readings through the SDK, never your credentials.
 
 Connections are read-only and shared across displays, while each display chooses

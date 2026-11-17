@@ -41,7 +41,7 @@ function BindingField({
     setLoading(true);
     const timer = setTimeout(() => {
       void api<{ sources: Source[]; total: number }>(
-        `/api/integrations/${integrationId}/sources?q=${encodeURIComponent(query)}&limit=${limit}&type=${input.type}${input.type === "number" && input.quantity ? `&quantity=${input.quantity}` : ""}`,
+        `/api/integrations/${integrationId}/sources?q=${encodeURIComponent(query)}&limit=${limit}&type=${input.type}${input.type === "number" && input.quantity ? `&quantity=${input.quantity}` : ""}${input.type === "forecast" ? `&period=${input.period}` : ""}`,
         { signal: controller.signal },
       )
         .then((result) => {
@@ -61,7 +61,14 @@ function BindingField({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [integrationId, query, limit]);
+  }, [
+    integrationId,
+    query,
+    limit,
+    input.type,
+    input.type === "number" ? input.quantity : undefined,
+    input.type === "forecast" ? input.period : undefined,
+  ]);
   const matching = sources.filter((source) => compatible(input, source));
   const options = [
     { value: "", label: "Not connected" },
@@ -105,7 +112,7 @@ function BindingField({
       />
       {integrationId && (
         <Select
-          label={`${input.label} ${input.type === "image" ? "photo source" : "sensor"}`}
+          label={`${input.label} ${input.type === "image" ? "photo source" : input.type === "weather" || input.type === "forecast" ? "weather source" : "sensor"}`}
           value={binding?.sourceId ?? ""}
           searchable
           onSearch={(value) => {
@@ -131,7 +138,9 @@ function BindingField({
               "immich"
               ? "No albums found. Check album access in Immich or search by album name."
               : "No photos found. Check the folder mount or search by folder/file name."
-            : "No compatible sensors found. Search by friendly name or entity ID."}
+            : input.type === "weather" || input.type === "forecast"
+              ? `No compatible weather sources found.${input.type === "forecast" ? ` The entity must support ${input.period} forecasts.` : ""} Search by friendly name or entity ID.`
+              : "No compatible sensors found. Search by friendly name or entity ID."}
         </small>
       )}
       {total > limit && (
@@ -231,7 +240,10 @@ export function useDataPreview(
           setResult({ key, error: errorMessage(error) });
       } finally {
         if (!controller.signal.aborted)
-          timer = setTimeout(() => void refresh(), 5000);
+          timer = setTimeout(
+            () => void refresh(),
+            face!.schemaVersion === 4 ? 30000 : 5000,
+          );
       }
     }
     void refresh();

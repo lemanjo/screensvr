@@ -54,7 +54,7 @@ export function FaceFrame(props: Props) {
         clearTimeout(timeout.current);
         const version = data.protocolVersion ?? 1;
         if (
-          ![1, 2, 3].includes(version) ||
+          ![1, 2, 3, 4].includes(version) ||
           version < latest.current.face.schemaVersion
         ) {
           setError(
@@ -72,7 +72,7 @@ export function FaceFrame(props: Props) {
       if (data?.type === "error") setError("This face encountered an error.");
     };
     frame.current?.contentWindow?.postMessage(
-      { type: "screensvr:connect", protocols: [3, 2, 1] },
+      { type: "screensvr:connect", protocols: [4, 3, 2, 1] },
       "*",
       [channel.port2],
     );

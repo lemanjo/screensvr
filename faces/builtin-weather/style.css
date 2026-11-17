@@ -1,0 +1,386 @@
+:root {
+  color-scheme: dark;
+  --background: #10191e;
+  --text: #e1e5df;
+  --accent: #a3b9b5;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  background: var(--background);
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+}
+p {
+  margin: 0;
+}
+.sky,
+.vignette {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -2;
+}
+.sky {
+  color: var(--accent);
+  background: radial-gradient(ellipse at 80% 8%, #779e9b0d, transparent 65%);
+}
+.vignette {
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--background) 82%, transparent) 15%,
+    transparent 90%
+  );
+}
+.light {
+  position: absolute;
+  inset: -15%;
+  opacity: 0;
+  background: radial-gradient(ellipse at 72% 20%, #d4b6761c, transparent 50%);
+  animation: light 100s ease-in-out infinite alternate;
+  transition: opacity 5s ease;
+}
+[data-sky="clear-day"] .light {
+  opacity: 1;
+}
+[data-sky="clear-night"] .light {
+  opacity: 0.65;
+  background: radial-gradient(ellipse at 72% 20%, #89a4c21a, transparent 50%);
+}
+.cloud {
+  position: absolute;
+  width: 95vw;
+  height: 60vh;
+  background: radial-gradient(ellipse, #a3b9b512, transparent 66%);
+  opacity: 0;
+  animation: clouds 100s ease-in-out infinite alternate;
+  transition: opacity 5s ease;
+}
+.cloud-one {
+  top: -25%;
+  left: -30%;
+}
+.cloud-two {
+  top: 20%;
+  left: 20%;
+  animation-delay: -35s;
+}
+.cloud-three {
+  top: 70%;
+  left: -25%;
+  animation-delay: -70s;
+}
+:is(
+    [data-sky="cloud"],
+    [data-sky="rain"],
+    [data-sky="snow"],
+    [data-sky="sleet"],
+    [data-sky="wind"],
+    [data-sky="fog"]
+  )
+  .cloud {
+  opacity: 1;
+}
+[data-sky="fog"] .cloud {
+  opacity: 0.65;
+  height: 90vh;
+}
+[data-sky="wind"] .cloud {
+  animation-duration: 50s;
+}
+.precipitation {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 4s ease;
+  /* Keep motion peripheral, away from the clock and weather text. */
+  mask-image: radial-gradient(ellipse at center, transparent 20%, #000 85%);
+}
+:is([data-sky="rain"], [data-sky="snow"], [data-sky="sleet"]) .precipitation {
+  opacity: 1;
+}
+.precipitation i {
+  position: absolute;
+  top: -12vh;
+  left: var(--x);
+  width: 1px;
+  height: 2.5vmin;
+  background: currentColor;
+  opacity: 0.18;
+  animation: rain calc(7s * var(--speed)) linear infinite;
+  animation-delay: var(--delay);
+}
+[data-sky="snow"] .precipitation i,
+[data-sky="sleet"] .precipitation i:nth-child(even) {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation-name: snow;
+  animation-duration: calc(24s * var(--speed));
+}
+.composition {
+  width: min(82vw, 1100px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 5vmin, 60px);
+}
+header,
+.forecast-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.eyebrow,
+.location {
+  color: var(--accent);
+  font-size: clamp(8px, 1.3vmin, 13px);
+  letter-spacing: 0.24em;
+  line-height: 1.6;
+}
+.date {
+  color: var(--accent);
+  font-size: clamp(9px, 1.4vmin, 14px);
+  line-height: 1.6;
+  opacity: 0.7;
+}
+.present {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 5vmin;
+}
+.clock-group {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5vmin;
+}
+.clock {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(44px, 21vmin, 240px);
+  font-weight: 400;
+  letter-spacing: -0.07em;
+  line-height: 1.1;
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+}
+.period {
+  font-size: clamp(9px, 1.6vmin, 16px);
+  color: var(--accent);
+}
+.current {
+  text-align: right;
+  min-width: 24%;
+}
+.location {
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+  max-width: 30ch;
+}
+.temperature {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(28px, 8vmin, 84px);
+  line-height: 1.4;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.unit {
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.35em;
+  margin-left: 0.2em;
+}
+.condition {
+  font-size: clamp(11px, 1.8vmin, 18px);
+  color: var(--accent);
+}
+.status {
+  font-size: clamp(9px, 1.2vmin, 12px);
+  line-height: 1.6;
+  color: var(--accent);
+  opacity: 0.65;
+}
+.current .status {
+  min-height: 1.6em;
+  margin-top: 0.6em;
+}
+[data-status="stale"] .temperature,
+[data-status="stale"] .forecast-entries {
+  opacity: 0.6;
+}
+.forecast {
+  border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  padding-top: clamp(12px, 2.5vmin, 28px);
+  min-height: 16vmin;
+}
+.forecast-entries {
+  display: flex;
+  gap: 2vmin;
+  margin-top: 3vmin;
+}
+.forecast-entry {
+  flex: 1;
+  min-width: 0;
+}
+.forecast-time {
+  font-size: clamp(10px, 1.6vmin, 16px);
+}
+.forecast-condition {
+  color: var(--accent);
+  font-size: clamp(9px, 1.3vmin, 13px);
+  line-height: 1.5;
+  margin: 0.8em 0 0.5em;
+}
+.forecast-temperature {
+  font-size: clamp(11px, 1.8vmin, 19px);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes light {
+  to {
+    transform: translate(-3%, 4%) scale(1.1);
+  }
+}
+@keyframes clouds {
+  to {
+    transform: translate(15vw, -4vh);
+  }
+}
+@keyframes rain {
+  from {
+    transform: translate3d(0, 0, 0) rotate(12deg);
+  }
+  to {
+    transform: translate3d(-12vw, 124vh, 0) rotate(12deg);
+  }
+}
+@keyframes snow {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(4vw, 62vh, 0);
+  }
+  100% {
+    transform: translate3d(-2vw, 124vh, 0);
+  }
+}
+.sky .light,
+.sky .cloud,
+.precipitation i {
+  animation-play-state: paused;
+}
+:is([data-sky="clear-day"], [data-sky="clear-night"]) .light,
+:is(
+    [data-sky="cloud"],
+    [data-sky="rain"],
+    [data-sky="snow"],
+    [data-sky="sleet"],
+    [data-sky="wind"],
+    [data-sky="fog"]
+  )
+  .cloud,
+:is([data-sky="rain"], [data-sky="snow"], [data-sky="sleet"]) .precipitation i {
+  animation-play-state: running;
+}
+[data-motion="false"] .sky * {
+  animation: none !important;
+  transition: none;
+}
+[data-motion="false"] .precipitation {
+  display: none;
+}
+[data-hidden="true"] .sky * {
+  animation-play-state: paused !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky * {
+    animation: none !important;
+    transition: none !important;
+  }
+  .precipitation {
+    display: none;
+  }
+}
+@media (max-aspect-ratio: 4/5) {
+  .composition {
+    width: 80vw;
+    gap: 6vmin;
+  }
+  header {
+    flex-direction: column;
+    gap: 0.8em;
+  }
+  .present {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4vmin;
+  }
+  .clock {
+    font-size: 24vmin;
+  }
+  .current {
+    text-align: left;
+  }
+  .temperature {
+    font-size: 12vmin;
+  }
+  .forecast-entries {
+    flex-wrap: wrap;
+    row-gap: 3vmin;
+  }
+  .forecast-entry {
+    flex-basis: 28%;
+  }
+}
+@media (max-height: 300px) {
+  .composition {
+    width: 88vw;
+    gap: 2vmin;
+  }
+  header .eyebrow {
+    display: none;
+  }
+  header {
+    justify-content: flex-end;
+  }
+  .current .status:empty {
+    display: none;
+  }
+  .temperature {
+    font-size: 26px;
+  }
+  .location {
+    font-size: 7px;
+  }
+  .condition {
+    font-size: 9px;
+  }
+  .forecast {
+    padding-top: 6px;
+    min-height: 0;
+  }
+  .forecast-heading .eyebrow {
+    font-size: 7px;
+  }
+  .forecast-condition {
+    margin: 0.2em 0;
+    font-size: 8px;
+  }
+  .forecast-entries {
+    margin-top: 1.5vmin;
+  }
+}

@@ -2,6 +2,9 @@ import WebSocket from "ws";
 import type { Source } from "../../shared/face-data.js";
 import { normalize, type EntityState } from "./normalize.js";
 import { secureLookup, websocketUrl } from "./network.js";
+import type { ForecastPeriod } from "../../shared/weather.js";
+import { Forecasts } from "./forecasts.js";
+import { currentWeather, weatherId, weatherSources } from "./weather.js";
 import {
   ConnectorError,
   type Connector,
@@ -13,26 +16,38 @@ type Pending = {
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
+type Queued = {
+  send: () => void;
+  reject: (error: Error) => void;
+};
 const object = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const metadata = (value: Record<string, unknown>) =>
-  Object.fromEntries(
-    Object.entries(value)
-      .filter(
-        ([key, item]) =>
-          ["device_class", "unit_of_measurement", "friendly_name"].includes(
-            key,
-          ) && typeof item === "string",
-      )
-      .map(([key, item]) => [
-        key,
-        (item as string).slice(0, key === "unit_of_measurement" ? 32 : 80),
-      ]),
-  );
+const metadata = (value: Record<string, unknown>) => {
+  const result: Record<string, unknown> = {};
+  for (const key of [
+    "device_class",
+    "unit_of_measurement",
+    "friendly_name",
+    "temperature_unit",
+  ])
+    if (Object.hasOwn(value, key))
+      result[key] =
+        typeof value[key] === "string"
+          ? value[key].slice(0, key === "friendly_name" ? 80 : 32)
+          : null;
+  for (const key of ["temperature", "supported_features"])
+    if (Object.hasOwn(value, key))
+      result[key] =
+        typeof value[key] === "number" && Number.isFinite(value[key])
+          ? value[key]
+          : null;
+  return result;
+};
 
 export class HomeAssistant implements Connector {
   private nextId = 1;
   private pending = new Map<number, Pending>();
+  private queued: Queued[] = [];
   private subscriptions = new Map<number, (event: unknown) => void>();
   private cancellations = new Set<() => void>();
   private closed = false;
@@ -42,6 +57,9 @@ export class HomeAssistant implements Connector {
   private readyResolve!: () => void;
   private readyReject!: (error: Error) => void;
   private authenticationTimer: ReturnType<typeof setTimeout>;
+  private forecasts = new Forecasts((entityId, period, callback) =>
+    this.watchForecast(entityId, period, callback),
+  );
 
   static async connect(
     url: string,
@@ -116,6 +134,7 @@ export class HomeAssistant implements Connector {
           if (!pending) return;
           this.pending.delete(message.id);
           clearTimeout(pending.timer);
+          this.drain();
           if (message.type === "pong" || message.success === true)
             pending.resolve(message.result);
           else
@@ -160,18 +179,29 @@ export class HomeAssistant implements Connector {
       return Promise.reject(
         new ConnectorError("Home Assistant is not connected."),
       );
-    if (this.pending.size >= 32)
+    if (this.queued.length >= 2048)
       return Promise.reject(
         new ConnectorError("Too many pending Home Assistant requests."),
       );
     return new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new ConnectorError("Home Assistant read timed out."));
-      }, 10000);
-      this.pending.set(id, { resolve, reject, timer });
-      this.socket.send(JSON.stringify({ id, type, ...body }));
+      this.queued.push({
+        reject,
+        send: () => {
+          const timer = setTimeout(() => {
+            this.pending.delete(id);
+            reject(new ConnectorError("Home Assistant read timed out."));
+            this.drain();
+          }, 10000);
+          this.pending.set(id, { resolve, reject, timer });
+          this.socket.send(JSON.stringify({ id, type, ...body }));
+        },
+      });
+      this.drain();
     });
+  }
+  private drain() {
+    while (!this.closed && this.pending.size < 32 && this.queued.length)
+      this.queued.shift()!.send();
   }
   async discover() {
     const result = await this.command("get_states");
@@ -192,12 +222,14 @@ export class HomeAssistant implements Connector {
         typeof entity.last_updated === "string"
           ? Date.parse(entity.last_updated)
           : NaN;
-      const normalized = normalize(entity.entity_id, {
+      const state = {
         state: entity.state,
         attributes: entity.attributes,
         updated: Number.isFinite(updated) ? updated : null,
-      });
+      };
+      const normalized = normalize(entity.entity_id, state);
       if (normalized) sources.push(normalized.source);
+      else sources.push(...weatherSources(entity.entity_id, state));
     }
     return sources;
   }
@@ -208,14 +240,95 @@ export class HomeAssistant implements Connector {
     if (
       !ids.length ||
       ids.length > 256 ||
-      ids.some((id) => !/^(sensor|binary_sensor)\.[a-z0-9_]{1,200}$/.test(id))
+      ids.some(
+        (id) =>
+          !/^(sensor|binary_sensor)\.[a-z0-9_]{1,200}$/.test(id) &&
+          !weatherId(id),
+      )
+    )
+      throw new ConnectorError(
+        "A filtered subscription requires 1–256 valid sensor or weather sources.",
+      );
+    const physical = [
+      ...new Set(ids.map((id) => weatherId(id)?.entityId ?? id)),
+    ];
+    let active = true;
+    let states = new Map<string, EntityState>();
+    let previous = new Map<string, Reading>();
+    const forecasts = new Map<string, ReturnType<Forecasts["acquire"]>>();
+    const emit = () => {
+      if (!active) return;
+      const readings = new Map<string, Reading>();
+      for (const sourceId of ids) {
+        const weather = weatherId(sourceId);
+        const state = states.get(weather?.entityId ?? sourceId);
+        if (weather?.period) {
+          const forecast = forecasts.get(sourceId);
+          if (forecast) readings.set(sourceId, forecast.reading);
+        } else if (state) {
+          const reading = weather
+            ? currentWeather(sourceId, state)
+            : normalize(sourceId, state, previous.get(sourceId)?.source);
+          if (reading) readings.set(sourceId, reading);
+        }
+      }
+      previous = readings;
+      callback(readings);
+    };
+    const watch = this.watchEntities(physical, (values) => {
+      states = values;
+      for (const sourceId of ids) {
+        const weather = weatherId(sourceId);
+        if (!weather?.period) continue;
+        const state = states.get(weather.entityId);
+        const forecast = forecasts.get(sourceId);
+        if (forecast) forecast.update(state);
+        else if (state)
+          forecasts.set(
+            sourceId,
+            this.forecasts.acquire(
+              weather.entityId,
+              weather.period,
+              state,
+              emit,
+            ),
+          );
+      }
+      emit();
+    });
+    const ready = watch.ready
+      .then(() =>
+        Promise.all([...forecasts.values()].map((item) => item.ready)),
+      )
+      .then(() => {});
+    void ready.catch(() => {});
+    return {
+      ready,
+      close: () => {
+        if (!active) return;
+        active = false;
+        watch.close();
+        for (const forecast of forecasts.values()) forecast.close();
+        forecasts.clear();
+      },
+    };
+  }
+  private watchEntities(
+    ids: string[],
+    callback: (values: Map<string, EntityState>) => void,
+  ): Watch {
+    if (
+      !ids.length ||
+      ids.length > 256 ||
+      ids.some(
+        (id) => !/^(sensor|binary_sensor|weather)\.[a-z0-9_]{1,200}$/.test(id),
+      )
     )
       throw new ConnectorError(
         "A filtered subscription requires 1–256 valid sensor IDs.",
       );
     const selected = new Set(ids);
     const states = new Map<string, EntityState>();
-    const readings = new Map<string, Reading>();
     const id = this.nextId++;
     let active = true;
     let initial = false;
@@ -303,13 +416,7 @@ export class HomeAssistant implements Connector {
       if (Array.isArray(event.r))
         for (const key of event.r)
           if (typeof key === "string") states.delete(key);
-      const previous = new Map(readings);
-      readings.clear();
-      for (const [key, state] of states) {
-        const normalized = normalize(key, state, previous.get(key)?.source);
-        if (normalized) readings.set(key, normalized);
-      }
-      callback(new Map(readings));
+      callback(new Map(states));
       if (!initial) {
         initial = true;
         clearTimeout(timer);
@@ -325,6 +432,54 @@ export class HomeAssistant implements Connector {
     void ready.catch(() => {});
     return { ready, close };
   }
+  private watchForecast(
+    entityId: string,
+    period: ForecastPeriod,
+    callback: (forecast: unknown) => void,
+  ): Watch {
+    const id = this.nextId++;
+    let active = true;
+    let resolve!: () => void;
+    let reject!: (error: Error) => void;
+    const initial = new Promise<void>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    const timer = setTimeout(
+      () => reject(new ConnectorError("Home Assistant forecast timed out.")),
+      10000,
+    );
+    const close = () => {
+      if (!active) return;
+      active = false;
+      clearTimeout(timer);
+      this.subscriptions.delete(id);
+      this.cancellations.delete(close);
+      reject(new ConnectorError("Home Assistant forecast was cancelled."));
+      if (!this.closed)
+        void this.command("unsubscribe_events", { subscription: id }).catch(
+          () => {},
+        );
+    };
+    this.cancellations.add(close);
+    this.subscriptions.set(id, (event) => {
+      if (!active) return;
+      // A malformed/unsupported forecast affects only this input.
+      callback(object(event) && event.type === period ? event.forecast : null);
+      clearTimeout(timer);
+      resolve();
+    });
+    const ready = Promise.all([
+      initial,
+      this.command(
+        "weather/subscribe_forecast",
+        { entity_id: entityId, forecast_type: period },
+        id,
+      ),
+    ]).then(() => {});
+    void ready.catch(() => {});
+    return { ready, close };
+  }
   private timestamp(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0
       ? Math.round(value * 1000)
@@ -336,6 +491,7 @@ export class HomeAssistant implements Connector {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.forecasts.close();
     clearTimeout(this.authenticationTimer);
     this.readyReject(
       new ConnectorError("Home Assistant connection was closed."),
@@ -345,6 +501,9 @@ export class HomeAssistant implements Connector {
       pending.reject(new ConnectorError("Home Assistant disconnected."));
     }
     this.pending.clear();
+    for (const queued of this.queued)
+      queued.reject(new ConnectorError("Home Assistant disconnected."));
+    this.queued = [];
     for (const cancel of this.cancellations) cancel();
     this.subscriptions.clear();
     this.socket.terminate();

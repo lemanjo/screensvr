@@ -1,4 +1,4 @@
-/* screensvr face protocols v1/v2/v3. No framework or build step required. */
+/* screensvr face protocols v1/v2/v3/v4. No framework or build step required. */
 (() => {
   let port;
   let latest;
@@ -183,7 +183,7 @@
     )
       return;
     const offered = event.data.protocols ?? [1];
-    const protocolVersion = [3, 2, 1].find((version) =>
+    const protocolVersion = [4, 3, 2, 1].find((version) =>
       offered.includes(version),
     );
     if (!protocolVersion) return;

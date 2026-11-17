@@ -166,8 +166,12 @@ available in Home Assistant **2024.1 and newer**. It supports:
 - Humidity sensors with the humidity device class and % units.
 - `binary_sensor` on/off states as booleans.
 - Short text `sensor` states, up to 200 characters.
+- `weather` entities: current temperature and condition, plus independently
+  selected daily and hourly forecasts when the entity supports them.
 
-There are no service calls, writes, templates, attribute paths, or history.
+Forecasts use the read-only `weather/subscribe_forecast` WebSocket command, not
+the `weather.get_forecasts` service/action or deprecated forecast attributes.
+There are no service calls, writes, templates, arbitrary attribute paths, or history.
 Units come from Home Assistant; screensvr does not convert them.
 
 ### Connect
@@ -204,6 +208,51 @@ faces may show a placeholder or a stale indicator instead.
 Stillroom shows a quiet placeholder when missing and explicitly labels retained
 stale readings; it never invents a temperature before you connect a sensor.
 
+### Weather
+
+1. Choose **Weather Hours** for a display or scene.
+2. Under **Data sources → Current weather**, choose your Home Assistant
+   connection and a weather entity, such as `weather.home`.
+3. Optionally bind **Daily forecast** and/or **Hourly forecast**. These are
+   separate selections; each list contains only entities advertising that
+   forecast capability. Usually all three inputs use the same entity.
+4. Choose **Next three days**, **Next six hours**, or **Hidden** under
+   **Forecast view**, check the preview, and save.
+
+Weather Hours displays supplied temperature/condition and up to three daily or
+six hourly entries. It does not synthesize daily highs/lows from hourly readings.
+Missing temperatures remain placeholders; missing forecasts do not hide valid
+current weather. Entities with only hourly forecasts work with **Next six hours**.
+Twice-daily forecasts are not supported.
+
+Rain, snow, clouds, fog, wind, and clear skies receive subtle background
+treatments based only on **fresh current conditions**, never on a forecast.
+Thunderstorms do not flash. Unknown, missing, or stale conditions use a neutral
+background, and retained old readings are explicitly marked stale. Turn off
+**Weather animation** for a static presentation; system reduced-motion
+preferences are also respected.
+
+Forecast timestamps are displayed in the configured display timezone. Daily
+entries include today, and hourly labels distinguish repeated daylight-saving
+hours. Old entries disappear on local clock/day rollover even without a new
+server update.
+
+Current weather follows the selected-entity stream's normal 90-second
+connectivity lease. Forecasts have their own confirmation age: screensvr
+re-subscribes every 15 minutes to request a current forecast response, and a ping
+cannot extend freshness beyond one hour since the last successful response.
+Subscription/read failures retain a previous valid forecast as stale; an explicit
+empty or unavailable forecast clears it. Home Assistant does not supply a
+forecast issuance timestamp, so screensvr does not invent one. A confirmation
+means Home Assistant supplied that forecast, not that screensvr independently
+verified the upstream weather station or forecast provider.
+
+Forecast subscriptions are shared across active displays and overlapping draft
+previews. Inactive scenes cause no background reads. Unbinding the last consumer
+stops the subscription/refresh and drops its forecast from memory. Weather
+previews refresh every 30 seconds rather than the normal five-second sensor
+preview interval.
+
 **Privacy:** display URLs and their state/stream APIs require no login. Anyone
 able to reach the server can read the selected values, including inputs the
 face currently hides. Use a trusted LAN, VPN, or reverse-proxy access control.
@@ -226,6 +275,8 @@ face currently hides. Use a trusted LAN, VPN, or reverse-proxy access control.
   data, not a zero or the literal word “unknown”.
 - A steady sensor remains fresh while its stream is healthy. A value does not
   become stale just because the sensor has not changed.
+- Current weather, daily forecasts, and hourly forecasts have independent
+  availability. Forecast failures do not disconnect working sensors.
 - A disconnected tablet locally expires readings after their freshness lease
   (normally 90 seconds), including after waking from sleep.
 
@@ -256,6 +307,9 @@ Up to 10 connections, 256 selected sources per connection, and 16 inputs per fac
 are supported. Discovery is bounded to 10,000 entities/16 MiB. Tests, discovery,
 and previews are rate-limited and have timeouts; high-rate readings are coalesced.
 Readings live in memory, not a history database.
+Current weather and each selected forecast period count as separate sources.
+Forecast initial reads are limited to four concurrent operations per connection,
+and normalized payloads contain at most seven daily or 24 hourly entries.
 
 Face authors should use provider-independent inputs and the
 [SDK data contract](faces.md#manifest-v2-data-inputs). See the framework-free

@@ -119,6 +119,28 @@ it("renews the lease on stable values without requiring source last_updated to c
   });
   expect(store.device("room")?.revision).toBe(1);
 });
+it("does not extend a forecast-style age ceiling or invent a newer observation on ping", async () => {
+  const value = normalize("sensor.room", {
+    state: "21",
+    attributes: { device_class: "temperature", unit_of_measurement: "°C" },
+    updated: 0,
+  })!;
+  clients[0].callback!(
+    new Map([["sensor.room", { ...value, validUntil: 160000 }]]),
+  );
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(data()).toMatchObject({
+    status: "ready",
+    observedAt: 100000,
+    expiresAt: 160000,
+  });
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(data()).toMatchObject({
+    status: "stale",
+    observedAt: 100000,
+    expiresAt: 160000,
+  });
+});
 it("shares concurrent discovery reads instead of requesting the full state repeatedly", async () => {
   const source = normalize("sensor.room", {
     state: "21",

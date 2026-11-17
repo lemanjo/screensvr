@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-sky="neutral" data-motion="true">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Weather Hours</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="/face-sdk.js"></script>
+    <script src="face.js" defer></script>
+  </head>
+  <body>
+    <div class="sky" aria-hidden="true">
+      <div class="light"></div>
+      <div class="cloud cloud-one"></div>
+      <div class="cloud cloud-two"></div>
+      <div class="cloud cloud-three"></div>
+      <div id="precipitation" class="precipitation"></div>
+    </div>
+    <div class="vignette" aria-hidden="true"></div>
+    <main class="composition">
+      <header>
+        <span class="eyebrow">WEATHER HOURS</span>
+        <p id="date" class="date"></p>
+      </header>
+      <div class="present">
+        <div class="clock-group">
+          <p id="clock" class="clock" role="timer">—</p>
+          <span id="period" class="period"></span>
+        </div>
+        <section id="current" class="current" aria-label="Current weather">
+          <p id="location" class="location">Outside</p>
+          <p class="temperature">
+            <span id="temperature">—</span><span id="unit" class="unit"></span>
+          </p>
+          <p id="condition" class="condition">Weather not connected</p>
+          <p id="weather-status" class="status"></p>
+        </section>
+      </div>
+      <section id="forecast" class="forecast" aria-label="Forecast">
+        <div class="forecast-heading">
+          <span id="forecast-label" class="eyebrow">THE DAYS AHEAD</span>
+          <span id="forecast-status" class="status"
+            >Forecast not connected</span
+          >
+        </div>
+        <div id="forecast-entries" class="forecast-entries"></div>
+      </section>
+    </main>
+  </body>
+</html>
