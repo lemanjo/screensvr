@@ -13,6 +13,82 @@
   --serif:
     "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 24px;
+}
+.integration-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.integration-card h2 {
+  font: 24px var(--serif);
+}
+.integration-card .section-title {
+  margin: 0;
+  gap: 12px;
+}
+.integration-card .form-actions {
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.integration-status {
+  background: #f4f0e7;
+  color: #806b3f;
+  border-radius: 20px;
+  padding: 5px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.integration-status.is-connected {
+  background: #edf3e8;
+  color: var(--green);
+}
+.integration-usage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.integration-warning {
+  background: #faf4e8;
+  color: #776138;
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+.integration-form,
+.binding-field {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.integration-form .form-actions {
+  flex-wrap: wrap;
+}
+.integration-empty {
+  margin-bottom: 28px;
+}
+.binding-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.binding-field {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.binding-field h3 {
+  font-size: 14px;
+  font-weight: 600;
+}
 * {
   box-sizing: border-box;
 }

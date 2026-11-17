@@ -58,7 +58,7 @@ it("migrates existing displays to persistent name-based URLs without losing sett
 
   store = new Store(filename);
   expect(store.db.prepare("PRAGMA user_version").get()).toMatchObject({
-    user_version: 2,
+    user_version: 3,
   });
   expect(store.display("olohuone")).toMatchObject({
     id: "old-one",
@@ -89,4 +89,43 @@ it("migrates existing displays to persistent name-based URLs without losing sett
     name: "Renamed",
     settings: { caption: "Saved" },
   });
+});
+
+it("upgrades a v2 database and enforces binding cascade/restrict constraints", async () => {
+  directory = await temporaryDirectory("screensvr-v2-migration-");
+  const filename = path.join(directory, "screensvr.sqlite");
+  store = new Store(filename);
+  store.db.exec(
+    "DROP TABLE device_input_bindings; DROP TABLE integrations; PRAGMA user_version = 2;",
+  );
+  store.db
+    .prepare("INSERT INTO faces VALUES (?, ?, 0)")
+    .run(testManifest.id, JSON.stringify(testManifest));
+  store.db
+    .prepare(
+      "INSERT INTO devices (id, slug, name, face_id, settings, timezone) VALUES ('room', 'room', 'Room', ?, '{}', 'UTC')",
+    )
+    .run(testManifest.id);
+  store.db.close();
+  store = new Store(filename);
+  expect(store.db.prepare("PRAGMA user_version").get()).toMatchObject({
+    user_version: 3,
+  });
+  expect(store.device("room")?.name).toBe("Room");
+  store.db
+    .prepare(
+      "INSERT INTO integrations (id, type, name, base_url, credentials) VALUES ('home', 'home-assistant', 'Home', 'http://localhost', 'encrypted')",
+    )
+    .run();
+  store.replaceBindings("room", {
+    temperature: { integrationId: "home", sourceId: "sensor.room" },
+  });
+  expect(() =>
+    store!.db.prepare("DELETE FROM integrations WHERE id = 'home'").run(),
+  ).toThrow();
+  store.db.prepare("DELETE FROM devices WHERE id = 'room'").run();
+  expect(store.usage("home")).toEqual([]);
+  expect(() =>
+    store!.db.prepare("DELETE FROM integrations WHERE id = 'home'").run(),
+  ).not.toThrow();
 });

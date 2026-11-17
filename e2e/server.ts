@@ -12,4 +12,4 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
       .then(() => process.exit(0));
   });
 }
-await app.listen({ port: 3100, host: "127.0.0.1" });
+await app.listen({ port: Number(process.env.PORT ?? 3100), host: "127.0.0.1" });

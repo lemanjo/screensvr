@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" data-motion="true">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stillroom</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <div class="edge" aria-hidden="true"></div>
+    <main class="composition">
+      <p id="date" class="date"></p>
+      <div class="clock-group">
+        <div id="clock" class="clock" role="timer" aria-live="off">
+          <span id="hours" class="hours">00</span>
+          <span class="colon" aria-hidden="true">:</span>
+          <span id="minutes" class="minutes">00</span>
+        </div>
+        <span id="period" class="period"></span>
+      </div>
+      <div class="breath" aria-hidden="true"><span></span></div>
+      <section
+        id="room"
+        class="room"
+        data-status="unbound"
+        aria-label="Room temperature: not connected"
+      >
+        <p id="room-label" class="room-label">In this room</p>
+        <p class="temperature">
+          <span id="temperature-value">—</span
+          ><span id="temperature-unit" class="temperature-unit"></span>
+        </p>
+        <p id="temperature-status" class="temperature-status">Not connected</p>
+      </section>
+    </main>
+    <span class="signature" aria-hidden="true">STILLROOM</span>
+    <script src="/face-sdk.js"></script>
+    <script src="face.js"></script>
+  </body>
+</html>

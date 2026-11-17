@@ -73,6 +73,15 @@ main {
   font-size: clamp(7px, 1.2vmin, 14px);
   opacity: 0.35;
 }
+#temperature {
+  position: absolute;
+  top: 6vmin;
+  right: 7vmin;
+  color: var(--accent);
+  font-size: clamp(12px, 3vmin, 32px);
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
 @keyframes drift {
   to {
     transform: translate(25vmin, 20vmin);

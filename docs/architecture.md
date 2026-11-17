@@ -1,4 +1,4 @@
-# screensvr — v0.1 architecture
+# screensvr architecture
 
 screensvr is one Node.js 24 process serving a React management application, a
 display shell, REST APIs, SSE streams, and local face assets. SQLite and the face
@@ -6,19 +6,22 @@ directory share one persistent data volume. No cloud service is required.
 
 ## Implementation
 
-| Location                  | Responsibility                                                  |
-| ------------------------- | --------------------------------------------------------------- |
-| `src/server/app.ts`       | Fastify routes, access control, HTTP security, static hosting   |
-| `src/server/db.ts`        | SQLite schema and queries                                       |
-| `src/server/faces.ts`     | Bundled faces and bounded ZIP installation                      |
-| `src/server/auth.ts`      | Password hashing and administrator sessions                     |
-| `src/server/events.ts`    | Display connections, heartbeats, notifications                  |
-| `src/shared/contracts.ts` | Versioned manifests and configuration validation                |
-| `web/src/App.tsx`         | Administrator setup, display management, face library           |
-| `web/src/Display.tsx`     | Permanent display addresses, reconnects, fullscreen, wake locks |
-| `web/src/FaceFrame.tsx`   | Shared preview/display renderer and message bridge              |
-| `public/face-sdk.js`      | Framework-independent browser SDK                               |
-| `faces/`                  | Four immutable bundled faces                                    |
+| Location                        | Responsibility                                                  |
+| ------------------------------- | --------------------------------------------------------------- |
+| `src/server/app.ts`             | Fastify routes, access control, HTTP security, static hosting   |
+| `src/server/db.ts`              | SQLite schema and queries                                       |
+| `src/server/faces.ts`           | Bundled faces and bounded ZIP installation                      |
+| `src/server/auth.ts`            | Password hashing and administrator sessions                     |
+| `src/server/events.ts`          | Display connections, heartbeats, notifications                  |
+| `src/server/integrations/`      | Built-in server-side connectors, management routes, live caches |
+| `src/server/display-state.ts`   | Selected-data projection and ordered display snapshots          |
+| `src/server/integration-key.ts` | Authenticated encryption and persistent integration key         |
+| `src/shared/contracts.ts`       | Versioned manifests and configuration validation                |
+| `web/src/App.tsx`               | Administrator setup, display management, face library           |
+| `web/src/Display.tsx`           | Permanent display addresses, reconnects, fullscreen, wake locks |
+| `web/src/FaceFrame.tsx`         | Shared preview/display renderer and message bridge              |
+| `public/face-sdk.js`            | Framework-independent browser SDK                               |
+| `faces/`                        | Five immutable bundled faces                                    |
 
 Vite builds the frontend; TypeScript compiles the server. Management is loaded
 separately from the display client so displays do not download the management UI
@@ -33,13 +36,20 @@ and manifest-validation code.
   last-seen timestamp.
 - **Administrator:** one salted scrypt password hash.
 - **Sessions:** hashed random session tokens, CSRF tokens, and expiry.
+- **Integrations:** named provider connections, encrypted credentials, enabled
+  state, and optimistic configuration revisions.
+- **Input bindings:** explicit per-device input-to-source assignments, cascaded
+  on device deletion and cleared on face changes. Referenced integrations cannot
+  be deleted until unbound.
 
 Foreign keys prevent deleting assigned faces. Updates use an expected revision
 to reject stale edits. SQLite uses WAL mode, foreign keys, and versioned
 transactional schema initialization (`PRAGMA user_version`).
 
 The data directory contains `screensvr.sqlite` (plus SQLite WAL files) and
-`faces/<id>/<version>/content/`. Bundled assets ship with the application.
+`faces/<id>/<version>/content/`, plus the restricted `integration-key` used for
+credentials. Bundled assets ship with the application. Sensor values are cached
+in memory, not persisted as history.
 
 ## Authentication and display addresses
 
@@ -71,8 +81,11 @@ network or enforce additional network/reverse-proxy access controls.
 ## Synchronization and recovery
 
 Each device connects to its own SSE endpoint using its permanent slug. Every
-connection receives a complete current snapshot; subsequent committed changes
-publish a new snapshot. Intermediate events do not need replaying.
+connection receives a complete current snapshot; subsequent configuration and
+selected-data changes publish a new snapshot. Intermediate events do not need
+replaying. A process epoch and monotonic sequence order snapshots without
+incrementing the device's configuration revision for every reading. HTTP refresh
+results cannot overwrite a newer stream event.
 
 The shell keeps the current face running during disconnection. EventSource
 reconnects automatically and receives the latest state, including changes made
@@ -91,10 +104,32 @@ origins. Public face assets allow anonymous CORS for ES modules and fonts from
 the sandbox's opaque origin; API responses do not.
 
 The shell transfers a MessagePort to the iframe. The SDK passes only validated
-settings and non-secret display context. No session token,
+settings, non-secret display context, and explicitly selected normalized input
+values. No entity IDs, raw attributes, integration addresses, session token,
 Home Assistant secret, or internal React API crosses this boundary.
 
 Preview and display use the same renderer and protocol.
+Manifest v1/protocol v1 remain supported. Manifest v2 declares optional typed
+inputs and requires data-capable protocol v2. The SDK locally expires ready
+readings and notifies faces of stale status during network loss/sleep.
+
+## Integration boundary
+
+One connector per enabled connection authenticates server-side. Home Assistant
+uses filtered entity subscriptions, deduplicated across saved display bindings.
+Discovery is administrator-only; draft previews use bounded one-shot filtered
+reads without saving or modifying live displays. Only built-in connectors run
+on the server; face ZIPs do not contain server scripts.
+
+Connector health renews a bounded freshness lease without requiring sensor
+values to change. Disconnections retain stale readings, while unavailable or
+removed entities clear values. Reconnection requires a fresh selected snapshot.
+Generation guards ignore replaced connections/subscriptions, and high-rate
+updates are coalesced per affected display.
+
+Credentials are encrypted with a key in the same persistent volume. This limits
+database-only disclosure, not full-volume compromise. API DTOs/logging exclude
+secrets. Display readings remain publicly readable to anyone reaching the server.
 
 **Only trusted packages are supported.** Browser sandboxing cannot prevent every
 resource-exhaustion attack, browser vulnerability, or misleading visual design.
@@ -117,7 +152,8 @@ face, then install its replacement. Bundled faces cannot be removed.
 
 ## Deliberately deferred
 
-Home Assistant, scheduling, registries, automatic updates and settings
-migrations, multi-user roles, native kiosk control, and offline startup are not
-implemented. Future integrations should remain server-side and expose only
-authorized data through a versioned face protocol.
+Scheduling, registries, automatic updates and settings migrations, multi-user
+roles, native kiosk control, and offline startup are not implemented. Additional
+integrations should remain server-side and expose only selected data through the
+versioned face protocol. Smart-home writes and arbitrary source transformations
+are deliberately out of scope.

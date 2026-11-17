@@ -15,6 +15,10 @@ import {
 import { api, ApiError, errorMessage, setCSRF } from "./api.js";
 import { FaceFrame } from "./FaceFrame.js";
 import { Select } from "./Select.js";
+import { Dialog } from "./Dialog.js";
+import { IntegrationsPage } from "./Integrations.js";
+import { BindingFields, useDataPreview } from "./Bindings.js";
+import type { Bindings, Integration } from "../../src/shared/face-data.js";
 
 const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const zones = ["UTC", localTimezone, ...Intl.supportedValuesOf("timeZone")];
@@ -86,81 +90,6 @@ function Icon({ name }: { name: IconName }) {
     >
       {paths[name]}
     </svg>
-  );
-}
-
-function Dialog({
-  title,
-  children,
-  onClose,
-  wide = false,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-  wide?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const dismiss = useRef(onClose);
-  dismiss.current = onClose;
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    ref.current?.querySelector<HTMLElement>("button, input, select")?.focus();
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss.current();
-      if (event.key !== "Tab") return;
-      const elements = [
-        ...(ref.current?.querySelectorAll<HTMLElement>(
-          "button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], textarea:not(:disabled)",
-        ) ?? []),
-      ];
-      const first = elements[0],
-        last = elements.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      }
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", key);
-    return () => {
-      document.body.style.overflow = overflow;
-      document.removeEventListener("keydown", key);
-      previous?.focus();
-    };
-  }, []);
-  return (
-    <div
-      className="overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={ref}
-        className={`dialog ${wide ? "dialog-wide" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dialog-title"
-      >
-        <div className="dialog-header">
-          <h2 id="dialog-title">{title}</h2>
-          <button
-            className="icon-button"
-            aria-label="Close dialog"
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -332,11 +261,13 @@ function SettingField({
 function DeviceEditor({
   device,
   faces,
+  integrations,
   onClose,
   onSave,
 }: {
   device: Device;
   faces: Face[];
+  integrations: Integration[];
   onClose: () => void;
   onSave: (body: object) => Promise<void>;
 }) {
@@ -344,9 +275,11 @@ function DeviceEditor({
   const [timezone, setTimezone] = useState(device.timezone);
   const [faceId, setFaceId] = useState(device.faceId);
   const [settings, setSettings] = useState<Settings>(device.settings);
+  const [bindings, setBindings] = useState<Bindings>(device.bindings);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const face = faces.find((face) => face.manifest.id === faceId);
+  const preview = useDataPreview(device.id, face?.manifest, bindings);
   if (!face)
     return (
       <Dialog title="This face is no longer installed" onClose={onClose}>
@@ -374,6 +307,7 @@ function DeviceEditor({
         timezone,
         faceId,
         settings,
+        bindings,
         revision: device.revision,
       });
       onClose();
@@ -393,6 +327,7 @@ function DeviceEditor({
               settings={settings}
               timezone={previewTimezone}
               name={name}
+              data={preview?.data}
             />
           </div>
           <span className="preview-label">
@@ -400,6 +335,11 @@ function DeviceEditor({
             LIVE PREVIEW
           </span>
           <p>Try something new. Changes go live when you save.</p>
+          {preview?.error && (
+            <p className="error" role="alert">
+              {preview.error}
+            </p>
+          )}
         </section>
         <form className="editor-form" onSubmit={(event) => void submit(event)}>
           <span className="eyebrow">YOUR DISPLAY</span>
@@ -429,6 +369,7 @@ function DeviceEditor({
             value={faceId}
             onChange={(value) => {
               setFaceId(value);
+              setBindings({});
               setSettings(
                 validateSettings(
                   faces.find((face) => face.manifest.id === value)!.manifest,
@@ -441,6 +382,13 @@ function DeviceEditor({
               label: face.manifest.name,
             }))}
           />
+          {faceId !== device.faceId &&
+            Object.keys(device.bindings).length > 0 && (
+              <p className="integration-warning">
+                Changing faces clears the previous face’s data sources when you
+                save.
+              </p>
+            )}
           <div className="form-divider" />
           <span className="eyebrow">MAKE IT YOURS</span>
           {face.manifest.settings.length === 0 && (
@@ -456,6 +404,12 @@ function DeviceEditor({
               }
             />
           ))}
+          <BindingFields
+            face={face.manifest}
+            bindings={bindings}
+            integrations={integrations}
+            onChange={setBindings}
+          />
           {error && (
             <p className="error" role="alert">
               {error}
@@ -654,7 +608,10 @@ export function App() {
   const [auth, setAuth] = useState<Auth>();
   const [faces, setFaces] = useState<Face[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [page, setPage] = useState<"displays" | "faces">("displays");
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [page, setPage] = useState<"displays" | "faces" | "integrations">(
+    "displays",
+  );
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [adding, setAdding] = useState(false);
@@ -670,12 +627,14 @@ export function App() {
   const input = useRef<HTMLInputElement>(null);
   async function load() {
     try {
-      const [nextFaces, nextDevices] = await Promise.all([
+      const [nextFaces, nextDevices, nextIntegrations] = await Promise.all([
         api<Face[]>("/api/faces"),
         api<Device[]>("/api/devices"),
+        api<Integration[]>("/api/integrations"),
       ]);
       setFaces(nextFaces);
       setDevices(nextDevices);
+      setIntegrations(nextIntegrations);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401)
         setAuth({ configured: true, authenticated: false });
@@ -745,6 +704,13 @@ export function App() {
             <Icon name="grid" />
             Face library<span className="nav-count">{faces.length}</span>
           </button>
+          <button
+            className={page === "integrations" ? "active" : ""}
+            onClick={() => setPage("integrations")}
+          >
+            <Icon name="link" />
+            Integrations<span className="nav-count">{integrations.length}</span>
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="local-card">
@@ -779,7 +745,11 @@ export function App() {
           <span>
             <span className="breadcrumb">Your space</span>
             <span className="crumb-separator">/</span>
-            {page === "displays" ? "Displays" : "Face library"}
+            {page === "displays"
+              ? "Displays"
+              : page === "faces"
+                ? "Face library"
+                : "Integrations"}
           </span>
           <span className="server-status">
             <span className="status-dot" /> YOUR SELF-HOSTED SPACE
@@ -794,35 +764,46 @@ export function App() {
               </button>
             </div>
           )}
-          <section className="page-heading">
-            <div>
-              <span className="eyebrow">
-                {page === "displays"
-                  ? "GOOD THINGS HAPPEN IN THE QUIET."
-                  : "A DIFFERENT KIND OF SCREEN TIME."}
-              </span>
-              <h1>
-                {page === "displays"
-                  ? "Make room for a little calm."
-                  : "Find your screen’s personality."}
-              </h1>
-              <p>
-                {page === "displays"
-                  ? "Beautiful, unhurried moments. On every screen you call yours."
-                  : "A collection of little worlds. Pick a face, make it your own."}
-              </p>
-            </div>
-            <button
-              className="primary"
-              onClick={() =>
-                page === "displays" ? setAdding(true) : input.current?.click()
-              }
-            >
-              <Icon name={page === "displays" ? "plus" : "upload"} />
-              {page === "displays" ? "Add display" : "Install a face"}
-            </button>
-          </section>
-          {page === "displays" ? (
+          {page !== "integrations" && (
+            <section className="page-heading">
+              <div>
+                <span className="eyebrow">
+                  {page === "displays"
+                    ? "GOOD THINGS HAPPEN IN THE QUIET."
+                    : "A DIFFERENT KIND OF SCREEN TIME."}
+                </span>
+                <h1>
+                  {page === "displays"
+                    ? "Make room for a little calm."
+                    : "Find your screen’s personality."}
+                </h1>
+                <p>
+                  {page === "displays"
+                    ? "Beautiful, unhurried moments. On every screen you call yours."
+                    : "A collection of little worlds. Pick a face, make it your own."}
+                </p>
+              </div>
+              <button
+                className="primary"
+                onClick={() =>
+                  page === "displays" ? setAdding(true) : input.current?.click()
+                }
+              >
+                <Icon name={page === "displays" ? "plus" : "upload"} />
+                {page === "displays" ? "Add display" : "Install a face"}
+              </button>
+            </section>
+          )}
+          {page === "integrations" ? (
+            <IntegrationsPage
+              integrations={integrations}
+              onChanged={load}
+              onConfigure={(id) => {
+                setPage("displays");
+                setEditing(devices.find((device) => device.id === id));
+              }}
+            />
+          ) : page === "displays" ? (
             <>
               <div className="section-title">
                 <h2>
@@ -877,6 +858,7 @@ export function App() {
                               settings={device.settings}
                               timezone={device.timezone}
                               name={device.name}
+                              data={device.data}
                             />
                           )}
                           <span
@@ -1048,6 +1030,7 @@ export function App() {
           key={editing.id}
           device={editing}
           faces={faces}
+          integrations={integrations}
           onClose={() => setEditing(undefined)}
           onSave={async (body) => {
             await api(`/api/devices/${editing.id}`, {

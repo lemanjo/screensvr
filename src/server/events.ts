@@ -1,8 +1,10 @@
 import type { ServerResponse } from "node:http";
 import type { Store } from "./db.js";
+import type { DisplayState } from "../shared/contracts.js";
 
 export class Events {
   private clients = new Map<string, Set<ServerResponse>>();
+  constructor(private state?: (id: string) => DisplayState | undefined) {}
 
   online(id: string) {
     return Boolean(this.clients.get(id)?.size);
@@ -32,11 +34,15 @@ export class Events {
     return true;
   }
 
+  send(id: string, client: ServerResponse, store: Store) {
+    const state = this.state ? this.state(id) : store.state(id);
+    if (!client.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`))
+      client.destroy();
+  }
+
   publish(id: string, store: Store) {
-    const state = store.state(id);
     for (const client of this.clients.get(id) ?? []) {
-      if (!client.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`))
-        client.destroy();
+      this.send(id, client, store);
     }
   }
 

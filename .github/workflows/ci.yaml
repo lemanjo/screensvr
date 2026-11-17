@@ -62,8 +62,8 @@ jobs:
         run: |
           actionlint
           shellcheck .github/scripts/*.sh
-      - run: npm audit --ignore-scripts --audit-level=high
-      - run: npm audit --prefix .devcontainer/tooling --ignore-scripts --audit-level=high
+      - name: Audit production, development, and bootstrap dependencies
+        run: node .github/scripts/audit-dependencies.ts
 
   container:
     runs-on: ubuntu-24.04

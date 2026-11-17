@@ -1,5 +1,17 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Face, Settings } from "../shared/contracts.js";
+import type { Bindings } from "../shared/face-data.js";
+import { chmodSync } from "node:fs";
+
+export type IntegrationRow = {
+  id: string;
+  type: "home-assistant";
+  name: string;
+  base_url: string;
+  credentials: string;
+  enabled: number;
+  revision: number;
+};
 
 export type DeviceRow = {
   id: string;
@@ -17,14 +29,17 @@ export class Store {
 
   constructor(filename: string) {
     this.db = new DatabaseSync(filename);
+    if (filename !== ":memory:") chmodSync(filename, 0o600);
     this.db.exec(
       "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
     );
     const version = (
       this.db.prepare("PRAGMA user_version").get() as { user_version: number }
     ).user_version;
-    if (version > 2)
+    if (version > 3) {
+      this.db.close();
       throw new Error("This database requires a newer screensvr version.");
+    }
     if (version === 0) {
       this.db.exec(`
         BEGIN;
@@ -66,6 +81,26 @@ export class Store {
         throw error;
       }
     }
+    if (version < 3) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE integrations (
+          id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL,
+          base_url TEXT NOT NULL, credentials TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1, revision INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE device_input_bindings (
+          device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          input_key TEXT NOT NULL,
+          integration_id TEXT NOT NULL REFERENCES integrations(id) ON DELETE RESTRICT,
+          source_id TEXT NOT NULL,
+          PRIMARY KEY (device_id, input_key)
+        );
+        CREATE INDEX bindings_integration ON device_input_bindings(integration_id);
+        PRAGMA user_version = 3;
+        COMMIT;
+      `);
+    }
   }
 
   getMeta(key: string): string | undefined {
@@ -73,6 +108,55 @@ export class Store {
       this.db.prepare("SELECT value FROM meta WHERE key = ?").get(key) as
         { value: string } | undefined
     )?.value;
+  }
+
+  integrations() {
+    return this.db
+      .prepare("SELECT * FROM integrations ORDER BY name COLLATE NOCASE, id")
+      .all() as IntegrationRow[];
+  }
+
+  integration(id: string) {
+    return this.db
+      .prepare("SELECT * FROM integrations WHERE id = ?")
+      .get(id) as IntegrationRow | undefined;
+  }
+
+  bindings(id: string): Bindings {
+    const rows = this.db
+      .prepare(
+        "SELECT input_key, integration_id, source_id FROM device_input_bindings WHERE device_id = ?",
+      )
+      .all(id) as {
+      input_key: string;
+      integration_id: string;
+      source_id: string;
+    }[];
+    return Object.fromEntries(
+      rows.map((row) => [
+        row.input_key,
+        { integrationId: row.integration_id, sourceId: row.source_id },
+      ]),
+    );
+  }
+
+  replaceBindings(id: string, bindings: Bindings) {
+    this.db
+      .prepare("DELETE FROM device_input_bindings WHERE device_id = ?")
+      .run(id);
+    const insert = this.db.prepare(
+      "INSERT INTO device_input_bindings VALUES (?, ?, ?, ?)",
+    );
+    for (const [key, binding] of Object.entries(bindings))
+      insert.run(id, key, binding.integrationId, binding.sourceId);
+  }
+
+  usage(id: string) {
+    return this.db
+      .prepare(
+        "SELECT DISTINCT devices.id, devices.name FROM devices JOIN device_input_bindings b ON b.device_id = devices.id WHERE b.integration_id = ? ORDER BY devices.name",
+      )
+      .all(id) as { id: string; name: string }[];
   }
 
   faces(): Face[] {

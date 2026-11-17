@@ -129,7 +129,7 @@ kiosk app, not by screensvr.
 
 ## Included screen faces
 
-Four clock faces are ready to use. These screenshots show their default settings.
+Five clock faces are ready to use. These screenshots show their default settings.
 Each face has its own options for colors, clock style, or animation.
 
 | Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
@@ -139,6 +139,13 @@ Each face has its own options for colors, clock style, or animation.
 | **Color Drift**                                                                               | **Color Drift Night**                                                                                                       |
 | ![Color Drift: a numberless analog clock over a pastel gradient](docs/images/color-drift.png) | ![Color Drift Night: a moonlit analog clock over a dark indigo, plum, and teal gradient](docs/images/color-drift-night.png) |
 | Soft colors and a slowly moving gradient.                                                     | A darker take on Color Drift for a quieter screen.                                                                          |
+
+**Stillroom** pairs a locally bundled Instrument Serif digital clock with a
+quiet room-temperature reading on a charcoal-green background. Its gentle
+ambient movement respects reduced-motion preferences. Choose a Home Assistant
+sensor under the display's **Data sources → Room temperature** settings.
+
+![Stillroom: warm serif clock numerals and a room-temperature reading on a dark charcoal-green background](docs/images/stillroom.png)
 
 ## Add more faces
 
@@ -152,6 +159,18 @@ adds protection but does not make untrusted code safe.
 
 Want to build your own? Start with the [face developer guide](docs/faces.md) and
 the [framework-free example](examples/paper/).
+
+## Connect your home
+
+Add a **Home Assistant** connection under **Integrations**, then select a sensor
+in a display's **Data sources** settings. Slow Hours and Stillroom can show a room
+temperature; other faces can declare numeric, humidity, boolean, or text inputs.
+Faces receive only the selected readings through the SDK, never your credentials.
+
+Connections are read-only and shared across displays, while each display chooses
+its own sensors. See [integration setup and privacy](docs/integrations.md) and the
+[Room Climate developer example](examples/room-climate/). Selected readings are
+public to anyone who can reach the display URL, just like other display content.
 
 ## Development
 
@@ -183,3 +202,6 @@ for more details.
 ## License
 
 Licensed under the [MIT License](LICENSE).
+
+Stillroom's bundled Instrument Serif font is distributed under the
+[SIL Open Font License 1.1](faces/builtin-stillroom/assets/OFL.txt).

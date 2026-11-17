@@ -13,6 +13,11 @@ import { auth, hash, passwordHash, passwordMatches } from "./auth.js";
 import { Store } from "./db.js";
 import { Events } from "./events.js";
 import { faceAssetRoot, Faces, UserError, ZIP_LIMIT } from "./faces.js";
+import { bindingsSchema } from "../shared/face-data.js";
+import { Integrations } from "./integrations/manager.js";
+import { integrationRoutes } from "./integrations/routes.js";
+import type { ConnectorFactory } from "./integrations/home-assistant.js";
+import { DisplayStates } from "./display-state.js";
 
 const passwordBody = z
   .object({ password: z.string().min(12).max(128) })
@@ -39,6 +44,7 @@ const updateDevice = z
     timezone: timezone.optional(),
     faceId: z.string().max(64).optional(),
     settings: z.record(z.string(), z.unknown()).optional(),
+    bindings: bindingsSchema.optional(),
   })
   .strict();
 const mime: Record<string, string> = {
@@ -70,13 +76,32 @@ export type AppOptions = {
   origin?: string;
   logger?: boolean;
   trustProxy?: boolean;
+  connectorFactory?: ConnectorFactory;
 };
 
 export async function createApp(options: AppOptions) {
   const root = options.rootDir ?? process.cwd();
   mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
   const store = new Store(path.join(options.dataDir, "screensvr.sqlite"));
-  const events = new Events();
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  const events = new Events((id) => states.state(id));
+  const integrations = new Integrations(
+    store,
+    options.dataDir,
+    (integrationId) => {
+      for (const device of store.usage(integrationId)) {
+        if (pending.has(device.id)) continue;
+        const timer = setTimeout(() => {
+          pending.delete(device.id);
+          events.publish(device.id, store);
+        }, 250);
+        timer.unref();
+        pending.set(device.id, timer);
+      }
+    },
+    options.connectorFactory,
+  );
+  const states = new DisplayStates(store, integrations);
   const faces = new Faces(
     store,
     path.join(options.dataDir, "faces"),
@@ -84,7 +109,14 @@ export async function createApp(options: AppOptions) {
   );
   const app = Fastify({
     logger: options.logger
-      ? { redact: ["req.headers.cookie", "req.headers.authorization"] }
+      ? {
+          redact: [
+            "req.headers.cookie",
+            "req.headers.authorization",
+            "req.body.token",
+            "req.body.credentials",
+          ],
+        }
       : false,
     trustProxy: options.trustProxy ?? false,
     bodyLimit: 65536,
@@ -142,7 +174,12 @@ export async function createApp(options: AppOptions) {
       .code(500)
       .send({ error: "Something went wrong on the server." });
   });
-  app.addHook("preClose", async () => events.close());
+  app.addHook("preClose", async () => {
+    integrations.close();
+    for (const timer of pending.values()) clearTimeout(timer);
+    pending.clear();
+    events.close();
+  });
   app.addHook("onClose", async () => store.db.close());
 
   app.get("/api/health", async () => ({ status: "ok", version: "0.1.0" }));
@@ -189,6 +226,7 @@ export async function createApp(options: AppOptions) {
   app.get("/api/faces", { preHandler: security.requireAdmin }, async () =>
     store.faces(),
   );
+  integrationRoutes(app, store, integrations, security);
   app.post(
     "/api/faces",
     { preHandler: security.requireAdmin },
@@ -218,6 +256,8 @@ export async function createApp(options: AppOptions) {
       revision: row.revision,
       faceId: row.face_id,
       settings: JSON.parse(row.settings),
+      bindings: store.bindings(row.id),
+      data: states.state(row.id)!.data,
       lastSeen: row.last_seen,
       online: events.online(row.id),
     })),
@@ -271,19 +311,42 @@ export async function createApp(options: AppOptions) {
       } catch (error) {
         throw new UserError((error as Error).message);
       }
-      store.db
-        .prepare(
-          "UPDATE devices SET name = ?, timezone = ?, face_id = ?, settings = ?, revision = revision + 1 WHERE id = ?",
-        )
-        .run(
-          input.name ?? current.name,
-          input.timezone ?? current.timezone,
-          faceId,
-          JSON.stringify(settings),
-          current.id,
+      const previous = store.bindings(current.id);
+      const bindings = await integrations.validate(
+        face.manifest,
+        input.bindings ?? (faceId === current.face_id ? previous : {}),
+        faceId === current.face_id ? previous : {},
+        current.id,
+      );
+      // Validation can await upstream discovery; recheck after that await.
+      if (store.device(current.id)?.revision !== input.revision)
+        throw new UserError(
+          "This display changed elsewhere. Reload its settings and try again.",
+          409,
         );
+      store.db.exec("BEGIN;");
+      try {
+        store.db
+          .prepare(
+            "UPDATE devices SET name = ?, timezone = ?, face_id = ?, settings = ?, revision = revision + 1 WHERE id = ?",
+          )
+          .run(
+            input.name ?? current.name,
+            input.timezone ?? current.timezone,
+            faceId,
+            JSON.stringify(settings),
+            current.id,
+          );
+        store.replaceBindings(current.id, bindings);
+        integrations.checkLimits(bindings, current.id);
+        store.db.exec("COMMIT;");
+      } catch (error) {
+        store.db.exec("ROLLBACK;");
+        throw error;
+      }
+      integrations.reconcile();
       events.publish(current.id, store);
-      return store.state(current.id);
+      return states.state(current.id);
     },
   );
   app.delete<{ Params: { id: string } }>(
@@ -296,6 +359,8 @@ export async function createApp(options: AppOptions) {
       store.db
         .prepare("DELETE FROM devices WHERE id = ?")
         .run(request.params.id);
+      states.forget(request.params.id);
+      integrations.reconcile();
       return { ok: true };
     },
   );
@@ -304,7 +369,7 @@ export async function createApp(options: AppOptions) {
     async (request) => {
       const row = store.display(request.params.slug);
       if (!row) throw new UserError("Display not found.", 404);
-      return store.state(row.id);
+      return states.state(row.id);
     },
   );
   app.get<{ Params: { slug: string } }>(
@@ -324,7 +389,7 @@ export async function createApp(options: AppOptions) {
         "X-Content-Type-Options": "nosniff",
       });
       reply.raw.write("retry: 3000\n\n");
-      events.publish(id, store);
+      events.send(id, reply.raw, store);
     },
   );
 
@@ -394,5 +459,6 @@ export async function createApp(options: AppOptions) {
   app.setNotFoundHandler((_request, reply) =>
     reply.code(404).send({ error: "Not found." }),
   );
-  return { app, store, events };
+  integrations.reconcile();
+  return { app, store, events, integrations, states };
 }

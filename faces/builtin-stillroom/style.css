@@ -1,0 +1,228 @@
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("assets/InstrumentSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --background: #101615;
+  --clock: #c9c4b8;
+  --accent: #98aa9a;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  background: var(--background);
+  color: var(--clock);
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  background: var(--background);
+}
+
+.atmosphere {
+  position: absolute;
+  inset: -15%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse at 17% 76%,
+      color-mix(in srgb, var(--accent) 9%, transparent),
+      transparent 54%
+    ),
+    radial-gradient(ellipse at 88% 16%, #9e85600a, transparent 45%);
+  animation: breathe 100s ease-in-out infinite alternate;
+}
+
+.edge {
+  position: absolute;
+  inset: clamp(12px, 4vmin, 44px);
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.composition {
+  width: min(86vw, 1100px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2.8vmin, 28px);
+  text-align: center;
+  padding: 3vmin 0;
+  transform: translateY(-1vmin);
+}
+
+p {
+  margin: 0;
+}
+
+.date {
+  color: var(--accent);
+  font-size: clamp(8px, 1.4vmin, 14px);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  opacity: 0.72;
+}
+
+.clock-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2vmin;
+}
+
+.clock {
+  display: flex;
+  align-items: baseline;
+  font-family: "Instrument Serif", "Bodoni MT", "Times New Roman", serif;
+  font-size: clamp(48px, 31vmin, 320px);
+  font-weight: 400;
+  line-height: 0.96;
+  letter-spacing: -0.035em;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.hours,
+.minutes {
+  min-width: 0.92em;
+}
+.hours {
+  text-align: right;
+}
+.minutes {
+  text-align: left;
+}
+.colon {
+  opacity: 0.48;
+  padding: 0 0.025em;
+  transform: translateY(-0.045em);
+}
+.period {
+  font-size: clamp(9px, 1.7vmin, 18px);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  opacity: 0.76;
+}
+.period:empty {
+  display: none;
+}
+
+.breath {
+  width: clamp(46px, 8vmin, 88px);
+  height: 1px;
+  margin-top: 0.5vmin;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 28%, transparent),
+    transparent
+  );
+  display: grid;
+  place-items: center;
+}
+.breath span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.room {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(4px, 0.8vmin, 9px);
+  max-width: 100%;
+}
+.room-label {
+  color: var(--accent);
+  font-size: clamp(8px, 1.2vmin, 12px);
+  letter-spacing: 0.18em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  max-width: min(60ch, 76vw);
+  overflow-wrap: anywhere;
+  opacity: 0.72;
+}
+.temperature {
+  font-family: "Instrument Serif", "Times New Roman", serif;
+  font-size: clamp(24px, 6.4vmin, 64px);
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.temperature-unit {
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-size: 0.35em;
+  margin-left: 0.25em;
+  vertical-align: 0.65em;
+  opacity: 0.72;
+}
+.temperature-status {
+  min-height: 1.5em;
+  font-size: clamp(8px, 1.15vmin, 11px);
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  opacity: 0.52;
+}
+.room:not([data-status="ready"]) .temperature {
+  opacity: 0.52;
+}
+
+.signature {
+  position: absolute;
+  bottom: clamp(15px, 6vmin, 64px);
+  font-size: clamp(7px, 0.95vmin, 10px);
+  letter-spacing: 0.42em;
+  color: var(--accent);
+  opacity: 0.32;
+}
+
+@keyframes breathe {
+  to {
+    transform: translate(3%, -2%) scale(1.04);
+  }
+}
+:root[data-motion="false"] .atmosphere {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere {
+    animation: none;
+  }
+}
+@media (max-height: 280px) {
+  .composition {
+    gap: 8px;
+    padding: 0;
+    transform: none;
+  }
+  .room {
+    gap: 3px;
+  }
+  .signature {
+    display: none;
+  }
+}
