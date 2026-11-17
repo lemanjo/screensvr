@@ -9,10 +9,8 @@ import { FakeHomeAssistant, fakeToken } from "./fake-home-assistant.js";
 import { manifestSchema } from "../src/shared/contracts.js";
 import { bindingsSchema, datumSchema } from "../src/shared/face-data.js";
 import { allowedAddress, baseUrl } from "../src/server/integrations/network.js";
-import {
-  HomeAssistant,
-  type Reading,
-} from "../src/server/integrations/home-assistant.js";
+import { HomeAssistant } from "../src/server/integrations/home-assistant.js";
+import type { Reading } from "../src/server/integrations/connector.js";
 import { normalize } from "../src/server/integrations/normalize.js";
 import { Secrets } from "../src/server/integration-key.js";
 

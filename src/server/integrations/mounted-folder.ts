@@ -6,9 +6,9 @@ import { z } from "zod";
 import type { Source } from "../../shared/face-data.js";
 import {
   ConnectorError,
-  type Connector,
+  type PhotoConnector,
   type Reading,
-} from "./home-assistant.js";
+} from "./connector.js";
 
 export const folderSchema = z
   .string()
@@ -37,7 +37,7 @@ type Photo = { id: string; filename: string };
 type Collection = { source: Source; photos: Photo[]; revision: string };
 
 // Folder/file IDs are opaque; filesystem paths never enter display snapshots.
-export class MountedFolder implements Connector {
+export class MountedFolder implements PhotoConnector {
   private collections = new Map<string, Collection>();
   private watchers = new Set<{
     ids: string[];

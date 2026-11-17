@@ -16,7 +16,7 @@ import { faceAssetRoot, Faces, UserError, ZIP_LIMIT } from "./faces.js";
 import { bindingsSchema } from "../shared/face-data.js";
 import { Integrations } from "./integrations/manager.js";
 import { integrationRoutes } from "./integrations/routes.js";
-import type { ConnectorFactory } from "./integrations/home-assistant.js";
+import type { ConnectorFactory } from "./integrations/connector.js";
 import { DisplayStates } from "./display-state.js";
 
 const passwordBody = z

@@ -2,7 +2,78 @@
 
 Integrations connect services to screensvr **on the server**. A face declares
 the kinds of data it can display; you choose a source separately for each display.
-The face controls where the reading appears and how it looks.
+The face controls where the reading or photo appears and how it looks.
+
+## Immich
+
+Use photos from an album owned by or shared with an
+[Immich](https://immich.app/) account. Supports **Immich 3.4.1 and later 3.x
+releases**; 2.x and other major versions are not supported. The connector uses
+the public album and cursor-based metadata-search APIs, not internal timeline APIs.
+
+### Connect and select an album
+
+1. In Immich user settings, create an API key with **`album.read`**,
+   **`asset.read`**, and **`asset.view`** permissions. Do not grant writes or
+   original-download access. Prefer a dedicated account shared only into the
+   albums you intend to display.
+2. In screensvr, open **Integrations → Add integration → Immich**.
+3. Enter a connection name, the Immich instance URL (for example,
+   `http://immich.local:2283`), and the API key. A trailing `/api` is also accepted.
+4. Choose **Test connection**, then **Save integration**.
+5. Choose **Photo Hours** or another photo-capable face in a display's settings.
+   Under **Data sources → Photos**, choose the connection and an album.
+6. Check the preview, then **Save changes**. Previewing never changes the live display.
+
+The URL must be reachable from the screensvr server/container. `localhost`
+inside Docker means that container, not your Immich host. Prefer HTTPS; HTTP
+exposes the API key and photos to network observers. TLS certificates are
+verified and redirects are rejected. LAN/loopback addresses are supported;
+link-local, metadata-service, unspecified, and multicast addresses are blocked.
+
+Album discovery does not browse the entire photo library. Each photo input
+chooses one album; multiple-album merging, favorites, the full library, public
+shared-link authentication, and videos are not supported.
+
+### Images, refresh, and privacy
+
+- The server requests **generated previews**, not original files. HEIC/RAW
+  originals can work if Immich has generated a JPEG, PNG, or WebP preview.
+  Missing, unsupported, or redirecting previews are unavailable. Photos are
+  orientation-corrected, resized without upscaling, and served as metadata-free
+  JPEG. Preview resolution is limited by Immich's generated preview settings.
+  Live photos use their still image; animation/video playback is not supported.
+- Videos, trashed, offline, hidden, and locked assets are excluded. Archived
+  images explicitly included in the selected album can be displayed.
+- Only selected albums are indexed. Membership and image revisions refresh
+  approximately every 30 seconds, without changing display settings. Empty,
+  removed, or inaccessible albums become unavailable; other albums keep working.
+- Indexing is capped at **10,000 photo references across the connection's cached
+  album selections**, 16 MiB of metadata/20 pages per album, and bounded HTTP
+  concurrency/timeouts. Over-limit selections report an error instead of being
+  silently truncated. Choose fewer/smaller albums; unused preview indexes expire
+  after ten minutes. Resized images use the same 32 MiB/128-entry memory cache as
+  mounted photos; previews over 50 MiB or 40 megapixels are not served.
+- Every image request rechecks upstream asset access and selected-album
+  membership, including resized-cache hits. Unbinding, disabling, or editing a
+  connection revokes existing scoped URLs. Credential rejection or missing key
+  permissions stops automatic retries; replace the key or test the saved
+  connection to retry.
+- Network failures reconnect automatically. Photo Hours keeps its last loaded
+  image while new loads are unavailable; its clock keeps running. This is not
+  an offline photo library or guaranteed offline cold start.
+- **The entire selected album is display content:** anyone who can reach the
+  display URL can access its selected images, not just the current photograph.
+  Preview URLs also temporarily grant access to the previewed album. Use a
+  trusted LAN, VPN, or reverse-proxy access control; never share preview links.
+- The API key is encrypted server-side and never returned to the browser.
+  Leaving the key blank when editing keeps the saved key. Immich addresses,
+  album/asset IDs, original paths, EXIF data, and credentials never enter face
+  data. Selecting an album limits what screensvr publishes, **not the key's
+  upstream access**; revoke an exposed key in Immich.
+
+Back up the whole screensvr data directory to retain encrypted connections and
+their encryption key. Back up your Immich library separately.
 
 ## Mounted photo folders
 
@@ -175,5 +246,6 @@ Face authors should use provider-independent inputs and the
 [SDK data contract](faces.md#manifest-v2-data-inputs). See the framework-free
 [Room Climate example](../examples/room-climate/).
 
-Browser/API tests use a local fake Home Assistant. Real Home Assistant and
-Fully Kiosk/Android device checks are still required before a production rollout.
+Browser/API tests use local fake Home Assistant and Immich servers. Real
+Home Assistant, Immich 3.4.1, and Fully Kiosk/Android device checks are still
+required before a production rollout.

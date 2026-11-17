@@ -3,7 +3,7 @@ import sharp from "sharp";
 import type { Bindings, PhotoValue } from "../shared/face-data.js";
 import type { Store } from "./db.js";
 import { UserError } from "./faces.js";
-import type { MountedFolder } from "./integrations/mounted-folder.js";
+import type { PhotoConnector } from "./integrations/connector.js";
 
 export type PhotoScope = {
   deviceId: string;
@@ -29,7 +29,7 @@ export class Photos {
   private active = 0;
   constructor(
     private store: Store,
-    private client: (id: string) => MountedFolder | undefined,
+    private client: (id: string) => PhotoConnector | undefined,
   ) {}
   grant(
     value: PhotoValue,
@@ -141,7 +141,7 @@ export class Photos {
             this.cacheBytes += bytes.length;
           }
         }
-        // Revocation during a filesystem read/resize also takes effect.
+        // Revocation during an upstream read/resize also takes effect.
         if (!this.authorized(token)) throw new Error();
         return bytes;
       } finally {

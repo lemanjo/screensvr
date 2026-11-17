@@ -15,14 +15,16 @@ import { UserError } from "../faces.js";
 import { Secrets } from "../integration-key.js";
 import { Photos, type PhotoScope } from "../photos.js";
 import { MountedFolder } from "./mounted-folder.js";
+import { Immich } from "./immich.js";
+import { HomeAssistant } from "./home-assistant.js";
 import {
   ConnectorError,
-  HomeAssistant,
+  isPhotoConnector,
   type Connector,
   type ConnectorFactory,
   type Reading,
   type Watch,
-} from "./home-assistant.js";
+} from "./connector.js";
 
 type Runtime = {
   revision: number;
@@ -64,7 +66,7 @@ export class Integrations {
     );
     this.photos = new Photos(store, (id) => {
       const client = this.runtimes.get(id)?.client;
-      return client instanceof MountedFolder ? client : undefined;
+      return isPhotoConnector(client) ? client : undefined;
     });
   }
   private current(id: string, runtime: Runtime) {
@@ -111,7 +113,7 @@ export class Integrations {
     let token: string;
     try {
       token =
-        row.type === "home-assistant"
+        row.type !== "mounted-folder"
           ? this.secrets.decrypt(row.credentials)
           : "";
     } catch (error) {
@@ -124,7 +126,7 @@ export class Integrations {
       const client =
         row.type === "mounted-folder"
           ? new MountedFolder(this.photosDirectory, row.base_url)
-          : await this.connect(
+          : await (row.type === "immich" ? Immich.connect : this.connect)(
               row.base_url,
               token,
               (error) => {
@@ -162,12 +164,14 @@ export class Integrations {
             runtime.attempts = 0;
             this.changed(row.id);
           })
-          .catch(() => {
+          .catch((error) => {
             if (runtime.client === client)
               this.failed(
                 row,
                 runtime,
-                new ConnectorError("Integration health check failed."),
+                error instanceof ConnectorError
+                  ? error
+                  : new ConnectorError("Integration health check failed."),
               );
           })
           .finally(() => {
@@ -257,7 +261,7 @@ export class Integrations {
       .then(() => {
         old?.close();
       })
-      .catch(() => {
+      .catch((error) => {
         old?.close();
         if (
           this.current(id, runtime) &&
@@ -268,9 +272,11 @@ export class Integrations {
             this.failed(
               row,
               runtime,
-              new ConnectorError(
-                "Home Assistant filtered sensor subscription failed. Check permissions and API compatibility.",
-              ),
+              error instanceof ConnectorError
+                ? error
+                : new ConnectorError(
+                    "Integration source subscription failed. Check permissions and API compatibility.",
+                  ),
             );
         }
       });
@@ -281,9 +287,9 @@ export class Integrations {
       return {
         id: row.id,
         name: row.name,
-        ...(row.type === "home-assistant"
-          ? { type: "home-assistant" as const, baseUrl: row.base_url }
-          : { type: "mounted-folder" as const, folder: row.base_url }),
+        ...(row.type === "mounted-folder"
+          ? { type: "mounted-folder" as const, folder: row.base_url }
+          : { type: row.type, baseUrl: row.base_url }),
         enabled: Boolean(row.enabled),
         revision: row.revision,
         hasCredentials: Boolean(row.credentials),
@@ -514,14 +520,23 @@ export class Integrations {
       this.previewCount--;
     }
   }
-  async test(url: string, token: string) {
+  async test(
+    url: string,
+    token: string,
+    type: "home-assistant" | "immich" = "home-assistant",
+  ) {
     if (this.operations.size >= 4)
       throw new UserError("Too many connection tests. Try again shortly.", 429);
     const abort = new AbortController();
     this.operations.add(abort);
     let client: Connector | undefined;
     try {
-      client = await this.connect(url, token, () => {}, abort.signal);
+      client = await (type === "immich" ? Immich.connect : this.connect)(
+        url,
+        token,
+        () => {},
+        abort.signal,
+      );
       abort.signal.addEventListener("abort", () => client?.close(), {
         once: true,
       });
@@ -532,7 +547,7 @@ export class Integrations {
       throw new UserError(
         error instanceof ConnectorError
           ? error.message
-          : "Could not test the Home Assistant connection.",
+          : "Could not test the integration connection.",
         502,
       );
     } finally {

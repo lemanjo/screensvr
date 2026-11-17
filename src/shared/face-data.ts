@@ -146,7 +146,7 @@ export type Source = {
   quantity?: "temperature" | "humidity";
   unit: string | null;
   available: boolean;
-  kind?: "folder" | "file";
+  kind?: "folder" | "file" | "album";
 };
 export function compatible(input: FaceInput, source: Source) {
   return (
@@ -176,5 +176,6 @@ type IntegrationBase = {
 export type Integration = IntegrationBase &
   (
     | { type: "home-assistant"; baseUrl: string }
+    | { type: "immich"; baseUrl: string }
     | { type: "mounted-folder"; folder: string }
   );

@@ -6,11 +6,13 @@ import type { auth } from "../auth.js";
 import type { Store } from "../db.js";
 import { UserError } from "../faces.js";
 import type { Integrations } from "./manager.js";
-import { baseUrl } from "./network.js";
+import { baseUrl, immichUrl } from "./network.js";
 import { folderSchema } from "./mounted-folder.js";
 
 const name = z.string().trim().min(1).max(80);
-const url = z.string().max(2048).transform(baseUrl);
+const rawUrl = z.string().max(2048);
+const url = rawUrl.transform((value) => baseUrl(value));
+const immichBaseUrl = rawUrl.transform(immichUrl);
 const token = z
   .string()
   .min(1)
@@ -27,6 +29,10 @@ const createHomeAssistant = z
   .strict();
 const create = z.discriminatedUnion("type", [
   createHomeAssistant,
+  createHomeAssistant.extend({
+    type: z.literal("immich"),
+    baseUrl: immichBaseUrl,
+  }),
   z
     .object({
       type: z.literal("mounted-folder"),
@@ -40,7 +46,7 @@ const edit = z
   .object({
     revision: z.number().int().positive(),
     name: name.optional(),
-    baseUrl: url.optional(),
+    baseUrl: rawUrl.optional(),
     folder: folderSchema.optional(),
     token: token.optional(),
     enabled: z.boolean().optional(),
@@ -48,7 +54,7 @@ const edit = z
   .strict();
 const test = z
   .object({
-    baseUrl: url.optional(),
+    baseUrl: rawUrl.optional(),
     token: token.optional(),
     folder: folderSchema.optional(),
   })
@@ -92,7 +98,7 @@ export function integrationRoutes(
     const id = randomUUID();
     let credentials = "";
     try {
-      if (input.type === "home-assistant")
+      if (input.type !== "mounted-folder")
         credentials = integrations.secrets.encrypt(input.token);
     } catch {
       throw new UserError(
@@ -108,7 +114,7 @@ export function integrationRoutes(
         id,
         input.type,
         input.name,
-        input.type === "home-assistant" ? input.baseUrl : input.folder,
+        input.type === "mounted-folder" ? input.folder : input.baseUrl,
         credentials,
         input.enabled === false ? 0 : 1,
       );
@@ -125,7 +131,7 @@ export function integrationRoutes(
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
       if (
-        (row.type === "home-assistant" && input.folder !== undefined) ||
+        (row.type !== "mounted-folder" && input.folder !== undefined) ||
         (row.type === "mounted-folder" &&
           (input.baseUrl !== undefined || input.token !== undefined))
       )
@@ -154,7 +160,12 @@ export function integrationRoutes(
         )
         .run(
           input.name ?? row.name,
-          input.folder ?? input.baseUrl ?? row.base_url,
+          input.folder ??
+            (input.baseUrl === undefined
+              ? row.base_url
+              : row.type === "immich"
+                ? immichUrl(input.baseUrl)
+                : baseUrl(input.baseUrl)),
           credentials,
           input.enabled === undefined ? row.enabled : Number(input.enabled),
           row.id,
@@ -193,6 +204,17 @@ export function integrationRoutes(
         .parse(request.body);
       return integrations.testFolder(input.folder);
     }
+    if ((request.body as { type?: string })?.type === "immich") {
+      const input = z
+        .object({
+          type: z.literal("immich"),
+          baseUrl: immichBaseUrl,
+          token,
+        })
+        .strict()
+        .parse(request.body);
+      return integrations.test(input.baseUrl, input.token, "immich");
+    }
     const input = z
       .object({
         type: z.literal("home-assistant").optional(),
@@ -220,7 +242,7 @@ export function integrationRoutes(
         return result;
       }
       if (input.folder !== undefined)
-        throw new UserError("Home Assistant does not use a folder.");
+        throw new UserError("This integration does not use a folder.");
       let credential = input.token;
       if (!credential) {
         try {
@@ -233,8 +255,13 @@ export function integrationRoutes(
         }
       }
       const result = await integrations.test(
-        input.baseUrl ?? row.base_url,
+        input.baseUrl === undefined
+          ? row.base_url
+          : row.type === "immich"
+            ? immichUrl(input.baseUrl)
+            : baseUrl(input.baseUrl),
         credential,
+        row.type,
       );
       if (!input.baseUrl && !input.token) integrations.retry(row.id);
       return result;

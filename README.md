@@ -147,10 +147,11 @@ sensor under the display's **Data sources → Room temperature** settings.
 
 ![Stillroom: warm serif clock numerals and a room-temperature reading on a dark charcoal-green background](docs/images/stillroom.png)
 
-**Photo Hours** shows a selected photo or a slideshow from a mounted directory,
-with an optional clock. Choose its photos under the display's **Data sources**
-settings. See [mounted photo setup](docs/integrations.md#mounted-photo-folders)
-for the optional read-only Docker/NAS mount.
+**Photo Hours** shows a selected photo or a slideshow from a mounted directory
+or an **Immich album**, with an optional clock. Choose its photos under the
+display's **Data sources** settings. See [Immich setup](docs/integrations.md#immich)
+or [mounted photo setup](docs/integrations.md#mounted-photo-folders) for the
+optional read-only Docker/NAS mount.
 
 ## Add more faces
 
@@ -176,6 +177,11 @@ Connections are read-only and shared across displays, while each display chooses
 its own sensors. See [integration setup and privacy](docs/integrations.md) and the
 [Room Climate developer example](examples/room-climate/). Selected readings are
 public to anyone who can reach the display URL, just like other display content.
+
+For photos, add **Immich** under Integrations using your instance URL and a
+read-only API key, then choose an owned/shared album in a display's photo data
+sources. Requires Immich **3.4.1 or later in 3.x**. Credentials stay on the server;
+the entire selected album has the same visibility as the display.
 
 ## Development
 

@@ -145,6 +145,17 @@ Server-side image decoding corrects orientation, strips metadata, and produces
 bounded JPEG variants cached in at most 32 MiB/128 entries of memory. Originals
 remain outside the data volume and are never modified.
 
+Photo connectors share a provider-neutral image-handle contract. Immich 3.4.1+
+(3.x) lists albums for administrator discovery and indexes only selected albums
+using public cursor-based metadata search. Selected collections refresh every
+30 seconds; hidden/locked, offline, trashed, and video assets are excluded.
+Generated previews pass through the same scoped endpoint, decoding, and cache
+as mounted photos. Every image request checks upstream access and album
+membership before consulting cached resized bytes. HTTP uses connection-time DNS
+validation, verified TLS, no redirects, bounded concurrency/body sizes, and
+timeouts. Only encrypted API keys and configured connections are persisted;
+upstream metadata/indexes and previews remain bounded in memory.
+
 **Only trusted packages are supported.** Browser sandboxing cannot prevent every
 resource-exhaustion attack, browser vulnerability, or misleading visual design.
 
