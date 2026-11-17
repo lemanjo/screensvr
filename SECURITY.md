@@ -21,6 +21,12 @@ rotate it immediately; deleting a file or rewriting Git history is not enough.
 - Use HTTPS and secure cookies when credentials cross an untrusted network.
 - Display addresses and read-only display APIs are public to anyone who can
   reach the server. Use a LAN, VPN, or reverse-proxy access controls as needed.
+- Selected integration readings inherit that public display visibility, even
+  when a face hides an input. Bind only data you intend to share.
+- Home Assistant credentials stay server-side, encrypted with a key in the
+  persistent volume. Full-volume backups still contain recoverable credentials.
+  Prefer HTTPS and a dedicated least-privilege HA account; a read-only connector
+  does not make its upstream token read-only.
 - Face packages contain trusted executable JavaScript. Their sandbox is defense
   in depth, not a guarantee that malicious packages are safe.
 - Do not use development servers or the Docker-socket-enabled development

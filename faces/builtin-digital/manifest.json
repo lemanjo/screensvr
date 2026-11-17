@@ -1,11 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "builtin-digital",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "Slow Hours",
   "description": "A quiet digital clock, soft light, and room to breathe.",
   "author": "screensvr",
   "entry": "index.html",
+  "inputs": [
+    {
+      "key": "roomTemperature",
+      "label": "Room temperature",
+      "type": "number",
+      "quantity": "temperature",
+      "description": "An optional temperature in the upper-right corner."
+    }
+  ],
   "settings": [
     {
       "key": "accent",

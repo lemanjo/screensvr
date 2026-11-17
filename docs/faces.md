@@ -92,6 +92,39 @@ in a display's settings. There are no server-side scripts or npm install hooks.
 
 The source of truth is [`src/shared/contracts.ts`](../src/shared/contracts.ts).
 
+## Manifest v2: data inputs
+
+Existing v1 faces need no changes. To receive integration data, use
+`"schemaVersion": 2` and add an `inputs` array alongside the normal metadata and
+settings:
+
+```json
+{
+  "inputs": [
+    {
+      "key": "roomTemperature",
+      "label": "Room temperature",
+      "description": "An optional reading in the upper-right corner.",
+      "type": "number",
+      "quantity": "temperature"
+    }
+  ]
+}
+```
+
+This is a manifest field fragment, not a complete manifest. Types are `number`,
+`boolean`, and `text`. Numeric inputs may constrain `quantity` to `temperature`
+or `humidity`; omit it for a generic numeric value with a source-provided unit.
+At most 16 unique, safe input keys are allowed, using the setting-key format.
+Descriptions have at most 200 characters. Unsupported fields are rejected.
+
+Inputs are optional and distinct from settings. The administrator binds sources
+per display. Never embed an entity ID, integration URL, token, attribute path,
+or integration-specific API into your face.
+
+Design the layout and fallback behavior yourself. The host does not add widgets.
+See [Room Climate](../examples/room-climate/) for a complete v2 package.
+
 ## SDK
 
 Load the host-provided SDK **before** your own script:
@@ -115,6 +148,43 @@ The callback runs with initial configuration and whenever settings, device
 context, or frame size change. Subscribing after initialization immediately
 receives the latest values. The return value unsubscribes the callback.
 
+For a v2 face, use the `data` map:
+
+```js
+window.screensvr.onUpdate(({ data, context }) => {
+  const temperature = data.roomTemperature;
+  const element = document.getElementById("temperature");
+  element.hidden = temperature.status !== "ready";
+  element.textContent =
+    temperature.status === "ready"
+      ? `${new Intl.NumberFormat(context.locale, { maximumFractionDigits: 1 }).format(temperature.value)} ${temperature.unit}`
+      : "";
+});
+```
+
+Every declared input has an entry, containing `type`, optional `quantity`,
+`status`, `value`, `unit`, `updatedAt`, `observedAt`, and `expiresAt`.
+
+| Status        | Meaning                                        | Value                            |
+| ------------- | ---------------------------------------------- | -------------------------------- |
+| `unbound`     | No selected source                             | `null`                           |
+| `loading`     | Waiting for an initial reading                 | `null`                           |
+| `ready`       | Valid, confirmed reading                       | Number, boolean, or short string |
+| `unavailable` | Missing/invalid source or disabled integration | `null`                           |
+| `stale`       | Last valid reading can no longer be confirmed  | Last valid typed value           |
+
+Timestamps are Unix milliseconds, or `null` when unknown. `updatedAt` describes
+the source's last update; `observedAt` is screensvr's latest confirmation.
+The SDK locally expires readings at `expiresAt` even when the display cannot
+reach the server. Treat stale values explicitly; do not present them as fresh.
+Temperature units are °C, °F, or K; humidity is %. Other numeric units are
+source-provided. No unit conversion is performed.
+
+Callbacks also run on data/freshness changes. Updates are deeply frozen; do not
+mutate them. v1 consumers still receive their existing config/context, with an
+empty SDK `data` map. Data is selected and normalized server-side: no raw entity
+IDs, attributes, credentials, or integration errors are provided.
+
 Render text with `textContent`, not `innerHTML`. Format clocks with
 `Intl.DateTimeFormat` and `context.timezone`; do not assume the tablet's timezone
 matches the device setting. The browser's own clock supplies time.
@@ -123,6 +193,9 @@ The transport is a MessageChannel transferred by the shell on iframe load.
 The SDK accepts the connection only from `parent`, replies `ready`, and receives
 `update` messages. Successful callbacks reply `applied`; thrown errors report
 `error`. Prefer the SDK over coupling directly to this transport.
+The host advertises protocols 1/2 and the SDK acknowledges its selected version.
+Legacy SDKs without a version acknowledgment use protocol 1; manifest-v2 faces
+require protocol 2.
 
 ## Frameworks and browser restrictions
 
@@ -150,5 +223,6 @@ deflated ZIP entries are supported. `manifest.json` is limited to 64 KiB.
 - Test on the actual target tablet/WebView; desktop browsers are not sufficient.
 
 Install only trusted packages. Sandboxing reduces access but does not make
-arbitrary hostile JavaScript safe. Automatic updates, capability grants, data
-integrations, and configuration migrations are deferred.
+arbitrary hostile JavaScript safe. Automatic updates, broader capability grants,
+and configuration migrations are deferred. Integration selection is explicit;
+changing faces clears bindings rather than granting a new face old data.

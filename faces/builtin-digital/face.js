@@ -35,6 +35,13 @@ window.screensvr.onUpdate((update) => {
   document.documentElement.style.setProperty("--accent", config.accent);
   document.documentElement.style.setProperty("--background", config.background);
   document.getElementById("caption").textContent = config.caption;
+  const temperature = update.data?.roomTemperature;
+  const element = document.getElementById("temperature");
+  element.hidden = temperature?.status !== "ready";
+  element.textContent =
+    temperature?.status === "ready"
+      ? `${new Intl.NumberFormat(context.locale, { maximumFractionDigits: 1 }).format(temperature.value)} ${temperature.unit}`
+      : "";
   prepare();
   tick();
 });

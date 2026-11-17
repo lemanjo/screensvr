@@ -153,7 +153,14 @@ docker compose start screensvr
 ```
 
 Choose a fresh destination for each backup. Backups include password hashes,
-sessions, and display settings; restrict access to them.
+sessions, display settings, encrypted integration credentials, and their
+`integration-key`; restrict access to them. Restore the matching key with the
+database. A missing/mismatched key disables integration access rather than
+silently replacing credentials.
+
+The integration update migrates SQLite to schema version 3. Older binaries cannot
+open that database. Back up before upgrading; rollback requires restoring the
+pre-upgrade data directory, not just starting an older container.
 
 To restore, stop screensvr, restore the complete directory into its data volume,
 ensure the runtime user can read/write it (normally UID 1000), and start the
@@ -172,8 +179,10 @@ matching application version. Test restoration before relying on a backup.
   directory below `/data/faces`. They are not served. After stopping the server
   and checking the database, an operator may remove only those known orphan
   directories. Do not delete referenced face directories.
-- Home Assistant, scheduling, registry downloads, multi-user permissions, and
-  offline startup are not part of v0.1.
+- Home Assistant sensor readings are supported through server-side
+  [integrations](integrations.md). Its URL must be reachable from the container.
+  Scheduling, registry downloads, multi-user permissions, and offline startup
+  are not implemented.
 
 The `/api/health` endpoint reports process readiness. SSE connections and
 last-seen timestamps provide display status in management; they do not imply

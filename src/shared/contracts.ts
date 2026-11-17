@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { inputSchema, type Bindings, type FaceData } from "./face-data.js";
 
 const key = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/);
 const base = { key, label: z.string().min(1).max(80) };
@@ -46,22 +47,39 @@ const settingSchema = z.discriminatedUnion("type", [
     .strict(),
 ]);
 
+const manifestFields = {
+  id: z.string().regex(/^[a-z][a-z0-9-]{1,63}$/),
+  version: z
+    .string()
+    .regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
+    .max(40),
+  name: z.string().min(1).max(80),
+  description: z.string().max(500),
+  author: z.string().max(80).optional(),
+  entry: z.literal("index.html"),
+  settings: z.array(settingSchema).max(32),
+};
 export const manifestSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    id: z.string().regex(/^[a-z][a-z0-9-]{1,63}$/),
-    version: z
-      .string()
-      .regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)
-      .max(40),
-    name: z.string().min(1).max(80),
-    description: z.string().max(500),
-    author: z.string().max(80).optional(),
-    entry: z.literal("index.html"),
-    settings: z.array(settingSchema).max(32),
-  })
-  .strict()
+  .discriminatedUnion("schemaVersion", [
+    z.object({ ...manifestFields, schemaVersion: z.literal(1) }).strict(),
+    z
+      .object({
+        ...manifestFields,
+        schemaVersion: z.literal(2),
+        inputs: z.array(inputSchema).max(16),
+      })
+      .strict(),
+  ])
   .superRefine((manifest, context) => {
+    if (
+      manifest.schemaVersion === 2 &&
+      new Set(manifest.inputs.map((input) => input.key)).size !==
+        manifest.inputs.length
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Input keys must be unique.",
+      });
     const keys = new Set<string>();
     for (const setting of manifest.settings) {
       if (
@@ -111,6 +129,9 @@ export type DisplayState = {
   revision: number;
   face: FaceManifest;
   settings: Settings;
+  data: FaceData;
+  epoch: string;
+  sequence: number;
 };
 export type Device = {
   id: string;
@@ -120,6 +141,8 @@ export type Device = {
   revision: number;
   faceId: string;
   settings: Settings;
+  bindings: Bindings;
+  data: FaceData;
   online: boolean;
   lastSeen: number | null;
 };

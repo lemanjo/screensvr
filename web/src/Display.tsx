@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { DisplayState } from "../../src/shared/contracts.js";
 import { api, ApiError } from "./api.js";
 import { FaceFrame } from "./FaceFrame.js";
+import { newerSnapshot } from "./snapshots.js";
 
 export function Display({ slug }: { slug: string }) {
   const [state, setState] = useState<DisplayState>();
@@ -11,13 +12,19 @@ export function Display({ slug }: { slug: string }) {
     let cancelled = false;
     let source: EventSource | undefined;
     let retry: ReturnType<typeof setTimeout>;
+    let streamGeneration = 0;
+    let requestGeneration = 0;
     async function refresh() {
+      const stream = streamGeneration;
+      const request = ++requestGeneration;
       const next = await api<DisplayState>(`/api/display/${slug}/state`);
-      if (!cancelled) {
+      if (
+        !cancelled &&
+        stream === streamGeneration &&
+        request === requestGeneration
+      ) {
         history.replaceState(null, "", next.displayUrl);
-        setState((current) =>
-          !current || next.revision >= current.revision ? next : current,
-        );
+        setState((current) => newerSnapshot(current, next));
       }
     }
     function terminal(message: string) {
@@ -33,10 +40,10 @@ export function Display({ slug }: { slug: string }) {
         if (cancelled) return;
         source = new EventSource(`/api/display/${slug}/events`);
         source.addEventListener("state", (event) => {
+          if (cancelled) return;
+          streamGeneration++;
           const next = JSON.parse((event as MessageEvent).data) as DisplayState;
-          setState((current) =>
-            !current || next.revision >= current.revision ? next : current,
-          );
+          setState((current) => newerSnapshot(current, next));
           setConnected(true);
           setError("");
         });
@@ -120,6 +127,7 @@ export function Display({ slug }: { slug: string }) {
         settings={state.settings}
         timezone={state.timezone}
         name={state.name}
+        data={state.data}
       />
       {!connected && (
         <span className="reconnecting" role="status">

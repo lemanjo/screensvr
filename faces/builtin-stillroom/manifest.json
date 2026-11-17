@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "id": "builtin-stillroom",
+  "version": "1.0.0",
+  "name": "Stillroom",
+  "description": "An expressive serif clock, a little room warmth, and the quiet of a dark evening.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "inputs": [
+    {
+      "key": "roomTemperature",
+      "label": "Room temperature",
+      "type": "number",
+      "quantity": "temperature",
+      "description": "Connect your room's temperature sensor. Missing readings stay quiet; old readings are marked as stale."
+    }
+  ],
+  "settings": [
+    {
+      "key": "background",
+      "label": "Night color",
+      "type": "color",
+      "default": "#101615"
+    },
+    {
+      "key": "clockColor",
+      "label": "Clock color",
+      "type": "color",
+      "default": "#c9c4b8"
+    },
+    {
+      "key": "accent",
+      "label": "Quiet accent",
+      "type": "color",
+      "default": "#98aa9a"
+    },
+    {
+      "key": "format",
+      "label": "Time format",
+      "type": "select",
+      "default": "24",
+      "options": [
+        { "label": "24 hour", "value": "24" },
+        { "label": "12 hour", "value": "12" }
+      ]
+    },
+    {
+      "key": "showDate",
+      "label": "Show date",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "roomLabel",
+      "label": "Room label",
+      "type": "text",
+      "default": "In this room"
+    },
+    {
+      "key": "motion",
+      "label": "Gentle ambient movement",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}

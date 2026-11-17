@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "id": "room-climate",
+  "version": "1.0.0",
+  "name": "Room Climate",
+  "description": "A framework-free example of optional, integration-independent data inputs.",
+  "author": "screensvr",
+  "entry": "index.html",
+  "settings": [],
+  "inputs": [
+    {
+      "key": "temperature",
+      "label": "Room temperature",
+      "type": "number",
+      "quantity": "temperature"
+    },
+    {
+      "key": "humidity",
+      "label": "Room humidity",
+      "type": "number",
+      "quantity": "humidity"
+    },
+    { "key": "window", "label": "Window open", "type": "boolean" },
+    { "key": "note", "label": "A short note", "type": "text" }
+  ]
+}

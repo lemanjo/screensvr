@@ -1,0 +1,12 @@
+Instrument Serif Regular
+Copyright 2022 The Instrument Serif Project Authors
+https://github.com/Instrument/instrument-serif
+
+Unmodified font downloaded from:
+https://github.com/google/fonts/blob/main/ofl/instrumentserif/InstrumentSerif-Regular.ttf
+
+SHA-256:
+498efd461f6ddfcb7a111bf9a565709d2085d48201d501ead960d93e84ffbb88
+
+Distributed under the SIL Open Font License 1.1; see OFL.txt in this directory.
+The font is loaded locally. The face makes no external font requests.

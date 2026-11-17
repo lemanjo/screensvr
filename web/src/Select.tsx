@@ -21,12 +21,14 @@ export function Select({
   options,
   onChange,
   searchable = false,
+  onSearch,
 }: {
   label: string;
   value: string;
   options: Option[];
   onChange: (value: string) => void;
   searchable?: boolean;
+  onSearch?: (query: string) => void;
 }) {
   const id = useId();
   const control = useRef<HTMLDivElement>(null);
@@ -45,6 +47,7 @@ export function Select({
 
   function showOptions() {
     setQuery("");
+    onSearch?.("");
     setActiveIndex(
       Math.max(
         0,
@@ -190,6 +193,7 @@ export function Select({
             }}
             onChange={(event) => {
               setQuery(event.target.value);
+              onSearch?.(event.target.value);
               setActiveIndex(0);
               setOpen(true);
             }}
