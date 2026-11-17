@@ -20,7 +20,22 @@ for (const [name, color] of [
       .toBuffer(),
   );
 }
-const { app } = await createApp({ dataDir, photosDir });
+let scheduleTime: number | undefined;
+const { app, scheduler } = await createApp({
+  dataDir,
+  photosDir,
+  now: () => scheduleTime ?? Date.now(),
+});
+// Clock control exists only in this disposable browser-test server, never in
+// production routes. Sensor freshness and authentication still use real time.
+app.post<{ Body: { now: number | null } }>(
+  "/__test/schedule-time",
+  async (request) => {
+    scheduleTime = request.body.now ?? undefined;
+    scheduler.reconcile();
+    return { ok: true };
+  },
+);
 for (const signal of ["SIGTERM", "SIGINT"]) {
   process.once(signal, () => {
     void app

@@ -1,5 +1,18 @@
 # Integrations
 
+## Scenes and saved selections
+
+Each display's scenes keep separate data-source selections. Switching scenes
+restores those bindings; it does not clear or copy selections from another scene.
+Only active scenes create live source subscriptions. Administrator previews use
+bounded one-shot reads and do not activate the previewed scene.
+
+Inactive scenes still reference their integrations: remove their bindings before
+deleting a connection. The 256-selected-source limit per integration includes
+all saved scenes, not just currently active scenes. Selected readings remain
+public when their scene is active; inactive scene configuration is
+administrator-only. Photo URLs are revoked when a scene stops being active.
+
 Integrations connect services to screensvr **on the server**. A face declares
 the kinds of data it can display; you choose a source separately for each display.
 The face controls where the reading or photo appears and how it looks.
@@ -200,9 +213,11 @@ face currently hides. Use a trusted LAN, VPN, or reverse-proxy access control.
 - Edit a connection to replace its token. A blank token field keeps the saved one;
   saved tokens are never sent back to the management browser.
 - Disabling stops its data but does not stop faces or remove their bindings.
-- Before deleting, unbind or reassign its sources on all listed displays.
-- Changing a display's face clears the previous face's bindings. The new face
-  receives nothing until you explicitly choose its sources.
+- Before deleting, unbind or reassign its sources in every scene on the listed
+  displays, including inactive scenes.
+- Changing a scene's face clears that scene's previous bindings. The new face
+  receives nothing until you explicitly choose its sources. Switching between
+  saved scenes instead restores each scene's own bindings.
 - Invalid credentials stop automatic retries. Replace the token or test the
   saved connection to retry.
 - Network interruptions reconnect automatically. Retained readings become stale;

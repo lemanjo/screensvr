@@ -30,6 +30,7 @@ describe("mounted photos and scoped image delivery", () => {
   let integrationId: string;
   let deviceId: string;
   let sources: Source[];
+  let scheduleNow: number | undefined;
   const image = () =>
     sharp({
       create: { width: 800, height: 400, channels: 3, background: "#507850" },
@@ -37,6 +38,7 @@ describe("mounted photos and scoped image delivery", () => {
       .jpeg()
       .toBuffer();
   beforeEach(async () => {
+    scheduleNow = undefined;
     directory = await temporaryDirectory("screensvr-photos-");
     photosDir = path.join(directory, "photos");
     await mkdir(path.join(photosDir, "family", "nested"), { recursive: true });
@@ -60,6 +62,7 @@ describe("mounted photos and scoped image delivery", () => {
     server = await createApp({
       dataDir: path.join(directory, "data"),
       photosDir,
+      now: () => scheduleNow ?? Date.now(),
     });
     headers = await administrator(server.app);
     const result = await server.app.inject({
@@ -273,6 +276,80 @@ describe("mounted photos and scoped image delivery", () => {
     expect(
       (await server.app.inject(state.data.photos.value.url)).statusCode,
     ).toBe(200);
+  });
+  it("revokes in-flight and old photo URLs on scheduled A → B → A transitions without edit revisions", async () => {
+    await bind(root());
+    const day = server.store.selection(deviceId)!.sceneId;
+    const created = await server.app.inject({
+      method: "POST",
+      url: `/api/devices/${deviceId}/scenes`,
+      headers,
+      payload: {
+        revision: 2,
+        name: "Night",
+        faceId: "builtin-digital",
+        settings: { nightMode: true },
+      },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const night = created.json().createdSceneId;
+    scheduleNow = Date.parse("2026-11-16T08:00:00Z");
+    const scheduled = await server.app.inject({
+      method: "PUT",
+      url: `/api/devices/${deviceId}/schedule`,
+      headers,
+      payload: {
+        revision: 3,
+        schedule: {
+          enabled: true,
+          entries: [
+            { days: [1, 2, 3, 4, 5, 6, 7], time: "07:00", sceneId: day },
+            { days: [1, 2, 3, 4, 5, 6, 7], time: "19:00", sceneId: night },
+            { days: [1, 2, 3, 4, 5, 6, 7], time: "20:00", sceneId: day },
+          ],
+        },
+      },
+    });
+    expect(scheduled.statusCode, scheduled.body).toBe(200);
+    const old = server.states.state(deviceId)!.data.photos.value as PhotoValue;
+    expect((await server.app.inject(old.url!)).statusCode).toBe(200);
+    let release!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const began = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const read = MountedFolder.prototype.read;
+    vi.spyOn(MountedFolder.prototype, "read").mockImplementationOnce(
+      async function (this: MountedFolder, source, index) {
+        const photo = await read.call(this, source, index);
+        started();
+        await blocked;
+        return photo;
+      },
+    );
+    const pending = server.app.inject(old.url!).then((response) => response);
+    await began;
+    scheduleNow = Date.parse("2026-11-16T19:00:00Z");
+    server.scheduler.reconcile();
+    release();
+    expect((await pending).statusCode).toBe(404);
+    expect((await server.app.inject(old.url!)).statusCode).toBe(404);
+    scheduleNow = Date.parse("2026-11-16T20:00:00Z");
+    server.scheduler.reconcile();
+    await expect
+      .poll(() => server.states.state(deviceId)?.data.photos.status)
+      .toBe("ready");
+    const current = server.states.state(deviceId)!;
+    expect(current.revision).toBe(4);
+    expect(current.sceneId).toBe(day);
+    expect(server.store.scene(deviceId, day)?.bindings.photos).toBeDefined();
+    expect((await server.app.inject(old.url!)).statusCode).toBe(404);
+    const fresh = current.data.photos.value as PhotoValue;
+    expect(fresh.url).not.toBe(old.url);
+    expect((await server.app.inject(fresh.url!)).statusCode).toBe(200);
   });
   it("limits source file size before loading or decoding it", async () => {
     const value = await bind(

@@ -10,7 +10,6 @@ import {
   type Device,
   type Face,
   type Settings,
-  type Setting,
 } from "../../src/shared/contracts.js";
 import { api, ApiError, errorMessage, setCSRF } from "./api.js";
 import { FaceFrame } from "./FaceFrame.js";
@@ -19,6 +18,8 @@ import { Dialog } from "./Dialog.js";
 import { IntegrationsPage } from "./Integrations.js";
 import { BindingFields, useDataPreview } from "./Bindings.js";
 import type { Bindings, Integration } from "../../src/shared/face-data.js";
+import { SettingField } from "./SettingField.js";
+import { Scenes } from "./Scenes.js";
 
 const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const zones = ["UTC", localTimezone, ...Intl.supportedValuesOf("timeZone")];
@@ -192,72 +193,6 @@ function Login({
   );
 }
 
-function SettingField({
-  setting,
-  value,
-  onChange,
-}: {
-  setting: Setting;
-  value: string | number | boolean;
-  onChange: (value: string | number | boolean) => void;
-}) {
-  if (setting.type === "boolean")
-    return (
-      <label className="toggle-field">
-        <span>{setting.label}</span>
-        <input
-          type="checkbox"
-          checked={Boolean(value)}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-      </label>
-    );
-  if (setting.type === "select")
-    return (
-      <Select
-        label={setting.label}
-        value={String(value)}
-        onChange={onChange}
-        options={setting.options}
-      />
-    );
-  if (setting.type === "color")
-    return (
-      <label>
-        {setting.label}
-        <div className="color-field">
-          <input
-            type="color"
-            value={String(value)}
-            onChange={(event) => onChange(event.target.value)}
-          />
-          <span>{String(value).toUpperCase()}</span>
-        </div>
-      </label>
-    );
-  return (
-    <label>
-      {setting.label}
-      <input
-        type={setting.type === "number" ? "number" : "text"}
-        value={String(value)}
-        min={setting.type === "number" ? setting.min : undefined}
-        max={setting.type === "number" ? setting.max : undefined}
-        step={setting.type === "number" ? (setting.step ?? "any") : undefined}
-        maxLength={setting.type === "text" ? 200 : undefined}
-        required={setting.type === "number"}
-        onChange={(event) =>
-          onChange(
-            setting.type === "number"
-              ? Number(event.target.value)
-              : event.target.value,
-          )
-        }
-      />
-    </label>
-  );
-}
-
 function DeviceEditor({
   device,
   faces,
@@ -302,14 +237,18 @@ function DeviceEditor({
     setBusy(true);
     setError("");
     try {
-      await onSave({
-        name,
-        timezone,
-        faceId,
-        settings,
-        bindings,
-        revision: device.revision,
-      });
+      await onSave(
+        device.schedule.enabled
+          ? { name, timezone, revision: device.revision }
+          : {
+              name,
+              timezone,
+              faceId,
+              settings,
+              bindings,
+              revision: device.revision,
+            },
+      );
       onClose();
     } catch (error) {
       setError(errorMessage(error));
@@ -364,52 +303,65 @@ function DeviceEditor({
                 label: zone.replaceAll("_", " "),
               }))}
           />
-          <Select
-            label="Screen face"
-            value={faceId}
-            onChange={(value) => {
-              setFaceId(value);
-              setBindings({});
-              setSettings(
-                validateSettings(
-                  faces.find((face) => face.manifest.id === value)!.manifest,
-                  {},
-                ),
-              );
-            }}
-            options={faces.map((face) => ({
-              value: face.manifest.id,
-              label: face.manifest.name,
-            }))}
-          />
-          {faceId !== device.faceId &&
-            Object.keys(device.bindings).length > 0 && (
-              <p className="integration-warning">
-                Changing faces clears the previous face’s data sources when you
-                save.
-              </p>
-            )}
-          <div className="form-divider" />
-          <span className="eyebrow">MAKE IT YOURS</span>
-          {face.manifest.settings.length === 0 && (
-            <p>This face has no settings.</p>
+          {device.schedule.enabled ? (
+            <p>
+              Scheduling is enabled. Edit faces and data sources under Scenes
+              &amp; schedule.
+            </p>
+          ) : (
+            <>
+              <Select
+                label="Screen face"
+                value={faceId}
+                onChange={(value) => {
+                  setFaceId(value);
+                  setBindings({});
+                  setSettings(
+                    validateSettings(
+                      faces.find((face) => face.manifest.id === value)!
+                        .manifest,
+                      {},
+                    ),
+                  );
+                }}
+                options={faces.map((face) => ({
+                  value: face.manifest.id,
+                  label: face.manifest.name,
+                }))}
+              />
+              {faceId !== device.faceId &&
+                Object.keys(device.bindings).length > 0 && (
+                  <p className="integration-warning">
+                    Changing faces clears the previous face’s data sources when
+                    you save.
+                  </p>
+                )}
+              <div className="form-divider" />
+              <span className="eyebrow">MAKE IT YOURS</span>
+              {face.manifest.settings.length === 0 && (
+                <p>This face has no settings.</p>
+              )}
+              {face.manifest.settings.map((setting) => (
+                <SettingField
+                  key={setting.key}
+                  setting={setting}
+                  value={settings[setting.key] ?? setting.default}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...current,
+                      [setting.key]: value,
+                    }))
+                  }
+                />
+              ))}
+              <BindingFields
+                face={face.manifest}
+                bindings={bindings}
+                integrations={integrations}
+                onChange={setBindings}
+              />
+            </>
           )}
-          {face.manifest.settings.map((setting) => (
-            <SettingField
-              key={setting.key}
-              setting={setting}
-              value={settings[setting.key] ?? setting.default}
-              onChange={(value) =>
-                setSettings((current) => ({ ...current, [setting.key]: value }))
-              }
-            />
-          ))}
-          <BindingFields
-            face={face.manifest}
-            bindings={bindings}
-            integrations={integrations}
-            onChange={setBindings}
-          />
           {error && (
             <p className="error" role="alert">
               {error}
@@ -616,6 +568,7 @@ export function App() {
   const [notice, setNotice] = useState("");
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Device>();
+  const [scenesFor, setScenesFor] = useState<Device>();
   const [displayLink, setDisplayLink] = useState("");
   const [installing, setInstalling] = useState<File>();
   const [removing, setRemoving] = useState<{
@@ -876,6 +829,16 @@ export function App() {
                               <span className="text-dot">·</span>
                               {device.timezone.replaceAll("_", " ")}
                             </p>
+                            <p>
+                              {
+                                device.scenes.find(
+                                  (scene) => scene.id === device.activeSceneId,
+                                )?.name
+                              }
+                              {device.schedule.enabled
+                                ? " · Scheduled"
+                                : " · Manual"}
+                            </p>
                           </div>
                           <button
                             className="icon-button"
@@ -886,6 +849,13 @@ export function App() {
                           </button>
                         </div>
                         <div className="device-footer">
+                          <button
+                            className="text-button"
+                            aria-label={`Scenes & schedule for ${device.name}`}
+                            onClick={() => setScenesFor(device)}
+                          >
+                            Scenes &amp; schedule
+                          </button>
                           <button
                             className="text-button"
                             aria-label={`Display link for ${device.name}`}
@@ -1040,6 +1010,15 @@ export function App() {
             await load();
             setNotice("A fresh mood, delivered.");
           }}
+        />
+      )}
+      {scenesFor && (
+        <Scenes
+          device={scenesFor}
+          faces={faces}
+          integrations={integrations}
+          onClose={() => setScenesFor(undefined)}
+          onChanged={load}
         />
       )}
       {displayLink && (

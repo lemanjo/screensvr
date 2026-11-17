@@ -13,20 +13,25 @@ export class DisplayStates {
   constructor(
     private store: Store,
     private integrations: Integrations,
+    private reconcile: () => void = () => {},
   ) {}
   state(id: string): DisplayState | undefined {
-    const base = this.store.state(id);
+    this.reconcile();
+    const selection = this.store.selection(id);
+    const base = this.store.state(id, selection);
     if (!base) {
       this.snapshots.delete(id);
       return;
     }
     const data = this.integrations.data(
       base.face,
-      this.store.bindings(id),
+      this.store.sceneBindings(base.sceneId),
       undefined,
       {
         deviceId: id,
         revision: base.revision,
+        sceneId: base.sceneId,
+        activation: selection!.generation,
       },
     );
     const content = JSON.stringify({ ...base, data });
@@ -43,5 +48,6 @@ export class DisplayStates {
   }
   forget(id: string) {
     this.snapshots.delete(id);
+    this.store.forget(id);
   }
 }

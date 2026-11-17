@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "id": "builtin-digital",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": "Slow Hours",
   "description": "A quiet digital clock, soft light, and room to breathe.",
   "author": "screensvr",
@@ -16,6 +16,12 @@
     }
   ],
   "settings": [
+    {
+      "key": "nightMode",
+      "label": "Near-black night clock",
+      "type": "boolean",
+      "default": false
+    },
     {
       "key": "accent",
       "label": "Ambient color",

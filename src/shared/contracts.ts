@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SceneConfiguration } from "./scenes.js";
 import {
   inputSchema,
   scalarInputSchema,
@@ -134,6 +135,7 @@ export type Setting = FaceManifest["settings"][number];
 export type Settings = Record<string, string | number | boolean>;
 export type Face = { manifest: FaceManifest; builtin: boolean };
 export type DisplayState = {
+  sceneId: string;
   id: string;
   displayUrl: string;
   name: string;
@@ -145,7 +147,7 @@ export type DisplayState = {
   epoch: string;
   sequence: number;
 };
-export type Device = {
+export type Device = SceneConfiguration & {
   id: string;
   displayUrl: string;
   name: string;

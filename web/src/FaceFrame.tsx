@@ -19,6 +19,11 @@ export function FaceFrame(props: Props) {
   latest.current = props;
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [applied, setApplied] = useState("");
+  const frameKey = `${props.face.id}/${props.face.version}/${attempt}`;
+  // Hide a new document until it has applied its initial settings. In particular,
+  // don't briefly show a bright face's defaults when entering a night scene.
+  const connectingKey = useRef("");
   function update() {
     const { settings, timezone, name, face, data } = latest.current;
     if (!protocol.current) return;
@@ -36,6 +41,8 @@ export function FaceFrame(props: Props) {
     });
   }
   function connect() {
+    connectingKey.current = frameKey;
+    setApplied("");
     port.current?.close();
     protocol.current = 0;
     clearTimeout(timeout.current);
@@ -58,7 +65,10 @@ export function FaceFrame(props: Props) {
         protocol.current = version;
         update();
       }
-      if (data?.type === "applied") setError("");
+      if (data?.type === "applied") {
+        setError("");
+        setApplied(connectingKey.current);
+      }
       if (data?.type === "error") setError("This face encountered an error.");
     };
     frame.current?.contentWindow?.postMessage(
@@ -84,7 +94,8 @@ export function FaceFrame(props: Props) {
   return (
     <div className="face-frame">
       <iframe
-        key={`${props.face.id}/${props.face.version}/${attempt}`}
+        key={frameKey}
+        style={{ visibility: applied === frameKey ? "visible" : "hidden" }}
         ref={frame}
         title={`${props.face.name} face`}
         sandbox="allow-scripts"

@@ -304,4 +304,5 @@ deflated ZIP entries are supported. `manifest.json` is limited to 64 KiB.
 Install only trusted packages. Sandboxing reduces access but does not make
 arbitrary hostile JavaScript safe. Automatic updates, broader capability grants,
 and configuration migrations are deferred. Integration selection is explicit;
-changing faces clears bindings rather than granting a new face old data.
+changing the face within a scene clears its bindings rather than granting a new
+face old data. Switching between saved scenes restores their own bindings.
