@@ -103,7 +103,7 @@ describe("curated online background collections", () => {
       ),
     ).toBe(true);
     expect(JSON.stringify(value)).not.toMatch(
-      /<script|thumburl|upload.wikimedia.org/,
+      /<script|thumburl|upload\.wikimedia\.org/,
     );
     const handle = await client.read("wikimedia-landscapes", 0, value.revision);
     expect(await handle.load()).toEqual(fake.image);
@@ -147,6 +147,8 @@ describe("curated online background collections", () => {
     ).toMatchObject({ count: 1 });
   });
   it("accepts public domain/CC0, decodes metadata as text, and bounds albums to 48 images", async () => {
+    expect(creditText("A<script>ignore</script>B")).toBe("A B");
+    expect(creditText("<scr<script>ignore</script>ipt>Visible")).toBe("Visible");
     expect(creditText("A &quot;photo&quot; &#x1f30d; &#999999999;")).toBe(
       'A "photo" 🌍',
     );
@@ -200,7 +202,7 @@ describe("curated online background collections", () => {
     await handle.load();
     expect(fake.requests).toHaveLength(3);
     expect(fake.requests.at(-1)!.url.href).toMatch(
-      /^https:\/\/images-assets.nasa.gov\/image\/.+~large.jpg$/,
+      /^https:\/\/images-assets\.nasa\.gov\/image\/.+~large\.jpg$/,
     );
     fake.files = ["https://evil.example/image/PIA12345/PIA12345~large.jpg"];
     await expect(handle.load()).rejects.toThrow(/supported size/);
@@ -481,7 +483,7 @@ describe("online background management and scoped delivery", () => {
     const value = await bind();
     const state = await server.app.inject("/api/display/online/state");
     expect(state.body).not.toMatch(
-      /upload.wikimedia.org|images-assets.nasa.gov|<a href|extmetadata/,
+      /upload\.wikimedia\.org|images-assets\.nasa\.gov|<a href|extmetadata/,
     );
     expect(value.credits![0]).toMatchObject({
       source: "Wikimedia Commons",

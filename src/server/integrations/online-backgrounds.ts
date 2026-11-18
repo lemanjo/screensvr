@@ -147,7 +147,9 @@ export function creditText(value: string) {
     copy: "©",
   };
   return value
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "")
+    // Keep a separator so removing an element cannot join surrounding text
+    // into a new markup token. Faces still render the result as textContent.
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, entity: string) => {
       if (!entity.startsWith("#"))
