@@ -164,17 +164,18 @@ function IntegrationEditor({
             }}
           />
         )}
-        <p>
-          {type === "online-backgrounds"
-            ? "Included and enabled by default: curated photo albums from Wikimedia Commons and NASA. No account or API key needed. Choose an album in each display’s Data sources. Only selected albums are fetched; internet access is required. Photo Hours shows image credits automatically."
-            : type === "ical"
-              ? "Subscribe to one read-only calendar feed. Choose which displays receive it separately. The full subscription URL is a secret and stays encrypted on the server."
-              : type === "mounted-folder"
-                ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
-                : type === "immich"
-                  ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
-                  : "Connect once, then choose which sensors, weather entities, or calendars each display receives. Faces never receive your access token."}
-        </p>
+        {type === "online-backgrounds" ? (
+          <p>
+            Wikimedia Commons and NASA albums. Enabled by default; requires
+            internet access.
+          </p>
+        ) : type === "ical" ? (
+          <small>
+            Subscription URLs are secrets, stored encrypted on the server.
+          </small>
+        ) : type === "immich" ? (
+          <small>Requires Immich 3.4.1 or later in 3.x.</small>
+        ) : null}
         <label>
           Connection name
           <input
@@ -186,10 +187,8 @@ function IntegrationEditor({
         </label>
         {type === "online-backgrounds" ? (
           <small>
-            Includes landscapes, birds, flowers, architecture, nebulae, Earth
-            from space, and planets. These are changing third-party collections,
-            not a guarantee of family-safe content. Required credits cannot be
-            turned off.
+            Third-party collections may include unsuitable content. Image
+            credits are required.
           </small>
         ) : type === "ical" ? (
           <>
@@ -210,10 +209,7 @@ function IntegrationEditor({
                 onChange={(event) => setFeedUrl(event.target.value)}
               />
             </label>
-            <small>
-              Use a direct .ics subscription URL, not a calendar web page.
-              webcal:// is accepted as HTTPS. Redirects are not followed.
-            </small>
+            <small>Direct .ics URL; webcal:// is supported.</small>
             {feedUrl.startsWith("http:") && (
               <p className="integration-warning">
                 HTTP exposes the secret feed URL and events. Prefer HTTPS.
@@ -229,8 +225,7 @@ function IntegrationEditor({
               />
             </label>
             <small>
-              IANA timezone, for example Europe/Helsinki. Used for floating
-              event times; explicit event timezones take precedence.
+              e.g. Europe/Helsinki. Used for events without a timezone.
             </small>
           </>
         ) : type === "mounted-folder" ? (
@@ -244,11 +239,7 @@ function IntegrationEditor({
                 onChange={(event) => setFolder(event.target.value)}
               />
             </label>
-            <small>
-              Mount your photos read-only at /photos in Docker. Use a relative
-              folder here, not a NAS address or host path. Subfolders are
-              included. JPEG, PNG, and WebP are supported.
-            </small>
+            <small>Relative to /photos; leave blank for all folders.</small>
           </>
         ) : (
           <>
@@ -269,8 +260,8 @@ function IntegrationEditor({
             </label>
             {baseUrl.startsWith("http:") && (
               <p className="integration-warning">
-                HTTP sends your credentials without encryption. Use it only on a
-                trusted network; prefer HTTPS.
+                HTTP sends credentials unencrypted. Use only on a trusted
+                network; prefer HTTPS.
               </p>
             )}
             <label>
@@ -292,11 +283,25 @@ function IntegrationEditor({
             </label>
             <small>
               {type === "immich"
-                ? "Create an API key in Immich user settings with album.read, asset.read, and asset.view permissions. No write or original-download permissions are needed. Prefer a dedicated account shared only into intended albums."
-                : "Create a long-lived access token in your Home Assistant profile under Security. Prefer a dedicated, least-privilege account. screensvr only reads data, but the token may permit other operations."}
+                ? "Required permissions: album.read, asset.read, asset.view. Use an account with access only to intended albums."
+                : "Tokens may allow more than read access. Use a dedicated, least-privilege account."}
             </small>
           </>
         )}
+        <details className="help">
+          <summary>Setup help</summary>
+          <p>
+            {type === "online-backgrounds"
+              ? "Choose an album in a display’s Data sources. Only selected albums are fetched. No account or API key is required."
+              : type === "ical"
+                ? "Use a calendar subscription URL, not a web page. webcal:// uses HTTPS; redirects are not followed. Event timezones override the calendar timezone."
+                : type === "mounted-folder"
+                  ? "Mount photos read-only at /photos in Docker. Enter a relative folder, not a NAS address or host path. Subfolders are included. Supported formats: JPEG, PNG, WebP."
+                  : type === "immich"
+                    ? "Create an API key in Immich user settings. Write and original-download permissions are not needed. Choose an album in a display’s Data sources; faces never receive the key."
+                    : "Create a long-lived access token in your Home Assistant profile under Security. Select sensors, weather, or calendars in a display’s Data sources; faces never receive the token."}
+          </p>
+        </details>
         <label className="toggle-field">
           <span>Enabled</span>
           <input
@@ -307,8 +312,9 @@ function IntegrationEditor({
         </label>
         {integration?.enabled && !enabled && (
           <p className="integration-warning">
-            Saving will stop data on {integration.usage.length} display(s).
-            Their clocks will keep running.
+            Saving stops data on {integration.usage.length}{" "}
+            {integration.usage.length === 1 ? "display" : "displays"}. Clocks
+            keep running.
           </p>
         )}
         {error && (
@@ -334,7 +340,7 @@ function IntegrationEditor({
             Test connection
           </button>
           <button className="primary" disabled={busy}>
-            {busy ? "One moment…" : "Save integration"}
+            {busy ? "Working…" : "Save integration"}
           </button>
         </div>
       </form>
@@ -393,28 +399,17 @@ export function IntegrationsPage({
   return (
     <>
       <section className="page-heading">
-        <div>
-          <span className="eyebrow">A LITTLE MORE CONTEXT.</span>
-          <h1>Your home, at a glance.</h1>
-          <p>Connect your services. Share only the data your faces need.</p>
-        </div>
+        <h1>Integrations</h1>
         <button className="primary" onClick={() => setEditing(null)}>
           Add integration
         </button>
       </section>
       {integrations.length === 0 && (
         <section className="empty-state integration-empty">
-          <div>
-            <h2>A connection to your home.</h2>
-            <p>
-              Add Home Assistant, an iCalendar feed, Immich, mounted photo
-              folders, or online backgrounds, then choose a source in a
-              display’s settings.
-            </p>
-            <button className="primary" onClick={() => setEditing(null)}>
-              Add your first integration
-            </button>
-          </div>
+          <h2>No integrations</h2>
+          <p>
+            Add an integration to use photos, weather, sensors, or calendars.
+          </p>
         </section>
       )}
       <div className="integration-grid">
@@ -430,9 +425,9 @@ export function IntegrationsPage({
             </div>
             <p className="muted">
               {integration.type === "online-backgrounds"
-                ? "Online backgrounds · Wikimedia Commons & NASA · no API key"
+                ? "Wikimedia Commons & NASA"
                 : integration.type === "ical"
-                  ? `iCalendar · ${integration.timezone} · subscription URL hidden`
+                  ? `iCalendar · ${integration.timezone}`
                   : integration.type === "home-assistant"
                     ? `Home Assistant · ${integration.baseUrl}`
                     : integration.type === "immich"
@@ -441,11 +436,7 @@ export function IntegrationsPage({
             </p>
             {integration.error && <p className="error">{integration.error}</p>}
             <div className="integration-usage">
-              <small>
-                {integration.usage.length
-                  ? "Used by"
-                  : "Not yet connected to a display"}
-              </small>
+              <small>{integration.usage.length ? "Used by" : "Not used"}</small>
               {integration.usage.map((device) => (
                 <button
                   key={device.id}
@@ -459,9 +450,10 @@ export function IntegrationsPage({
             <div className="form-actions">
               <button
                 className="secondary"
+                aria-label={`Configure ${integration.name}`}
                 onClick={() => setEditing(integration)}
               >
-                Configure {integration.name}
+                Configure
               </button>
               {integration.enabled && (
                 <button
@@ -508,8 +500,8 @@ export function IntegrationsPage({
           <div className="dialog-body">
             <p>
               {action.type === "disable"
-                ? "Selected readings will become unavailable. Your faces will keep running."
-                : "This permanently removes the connection and its saved credentials. Unbind its sources from every display first."}
+                ? "Data will become unavailable. Faces keep running."
+                : "Permanently deletes this connection and its credentials. Disconnect its sources from all displays and scenes first."}
             </p>
             {action.integration.usage.length > 0 && (
               <p>
@@ -531,7 +523,9 @@ export function IntegrationsPage({
               onClick={() => void confirm()}
             >
               {busy
-                ? "One moment…"
+                ? action.type === "disable"
+                  ? "Disabling…"
+                  : "Removing…"
                 : action.type === "disable"
                   ? "Disable integration"
                   : "Remove integration"}

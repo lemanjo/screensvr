@@ -164,7 +164,7 @@ link; see [integration privacy](docs/integrations.md#privacy-and-credentials).
 
 ### Install or build a face
 
-Choose **Face library → Install a face** and select a face ZIP. Only install
+Choose **Face library → Install face** and select a face ZIP. Only install
 packages from sources you trust: faces run JavaScript, and sandboxing does not
 make hostile packages safe.
 

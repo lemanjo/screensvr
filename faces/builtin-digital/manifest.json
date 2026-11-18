@@ -3,7 +3,7 @@
   "id": "builtin-digital",
   "version": "1.2.0",
   "name": "Slow Hours",
-  "description": "A quiet digital clock, soft light, and room to breathe.",
+  "description": "Digital clock with optional room temperature and night mode.",
   "author": "screensvr",
   "entry": "index.html",
   "inputs": [
@@ -12,13 +12,13 @@
       "label": "Room temperature",
       "type": "number",
       "quantity": "temperature",
-      "description": "An optional temperature in the upper-right corner."
+      "description": "Optional temperature in the upper-right corner."
     }
   ],
   "settings": [
     {
       "key": "nightMode",
-      "label": "Near-black night clock",
+      "label": "Night mode",
       "type": "boolean",
       "default": false
     },
@@ -52,7 +52,7 @@
     },
     {
       "key": "caption",
-      "label": "A small reminder",
+      "label": "Caption",
       "type": "text",
       "default": "Be here, now."
     }

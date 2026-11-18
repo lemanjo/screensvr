@@ -3,7 +3,7 @@
   "id": "builtin-gradient-dark",
   "version": "1.0.0",
   "name": "Color Drift Night",
-  "description": "Color Drift after dark. Midnight indigo, deep plum, and quiet teal move behind a moonlit, numberless clock.",
+  "description": "Numberless analog clock with an animated dark gradient.",
   "author": "screensvr",
   "entry": "index.html",
   "settings": [

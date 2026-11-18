@@ -3,7 +3,7 @@
   "id": "builtin-analog",
   "version": "1.0.0",
   "name": "Soft Orbit",
-  "description": "An understated analog face with a warm, paper-like finish.",
+  "description": "Analog clock with a paper-style background.",
   "author": "screensvr",
   "entry": "index.html",
   "settings": [
@@ -27,7 +27,7 @@
     },
     {
       "key": "caption",
-      "label": "A small reminder",
+      "label": "Caption",
       "type": "text",
       "default": "Make time for less."
     }

@@ -171,9 +171,7 @@ test("configure feeds and Home Assistant, preview a merge, save and revoke title
     await page
       .getByLabel("Administrator password")
       .fill("a-long-calendar-browser-password");
-    await page
-      .getByRole("button", { name: /Create your space|Sign in/ })
-      .click();
+    await page.getByRole("button", { name: /Create password|Sign in/ }).click();
     await page.getByRole("button", { name: /^Integrations/ }).click();
     await page
       .getByRole("button", { name: "Add integration", exact: true })
@@ -214,7 +212,7 @@ test("configure feeds and Home Assistant, preview a merge, save and revoke title
     await page
       .getByLabel("Display name", { exact: true })
       .fill("Calendar wall");
-    await page.getByRole("combobox", { name: "Start with a face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page
       .getByRole("option", { name: "Calendar Hours", exact: true })
       .click();

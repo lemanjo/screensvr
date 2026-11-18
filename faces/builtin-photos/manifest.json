@@ -3,14 +3,14 @@
   "id": "builtin-photos",
   "version": "1.0.0",
   "name": "Photo Hours",
-  "description": "Your photos or curated online backgrounds, with a quiet clock and image credits.",
+  "description": "Photo slideshow with an optional clock and image credits.",
   "author": "screensvr",
   "entry": "index.html",
   "inputs": [
     {
       "key": "photos",
       "label": "Photos",
-      "description": "An album, folder, favorite image, or curated online background collection.",
+      "description": "Album, folder, single image, or online collection.",
       "type": "image",
       "attribution": true
     }

@@ -24,16 +24,7 @@ import { Scenes } from "./Scenes.js";
 const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const zones = ["UTC", localTimezone, ...Intl.supportedValuesOf("timeZone")];
 type Auth = { configured: boolean; authenticated: boolean; csrf?: string };
-type IconName =
-  | "display"
-  | "grid"
-  | "plus"
-  | "arrow"
-  | "upload"
-  | "close"
-  | "settings"
-  | "leaf"
-  | "link";
+type IconName = "display" | "grid" | "plus" | "upload" | "settings" | "link";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
     display: (
@@ -51,24 +42,16 @@ function Icon({ name }: { name: IconName }) {
       </>
     ),
     plus: <path d="M12 5v14M5 12h14" />,
-    arrow: <path d="M5 12h14m-6-6 6 6-6 6" />,
     upload: (
       <>
         <path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5" />
       </>
     ),
-    close: <path d="m6 6 12 12M6 18 18 6" />,
     settings: (
       <>
         <path d="M4 7h16M4 17h16" />
         <circle cx="9" cy="7" r="3" />
         <circle cx="15" cy="17" r="3" />
-      </>
-    ),
-    leaf: (
-      <>
-        <path d="M20 4C7 2 1 11 7 17c6 6 15 0 13-13Z" />
-        <path d="m5 20 10-10" />
       </>
     ),
     link: (
@@ -122,31 +105,13 @@ function Login({
   }
   return (
     <main className="login-layout">
-      <div className="login-art">
-        <span className="eyebrow">LESS NOISE. MORE ATMOSPHERE.</span>
-        <h1>
-          A beautiful place
-          <br />
-          to do nothing.
-        </h1>
-        <div className="art-orbit">
-          <span />
-          <span />
-          <span />
-        </div>
-        <p>Your screens. Your space. Your little moment of calm.</p>
-      </div>
       <section className="login-panel">
         <div className="brand">
           <span className="brand-symbol" />
-          screensvr<span className="version">v0.1</span>
+          screensvr
         </div>
-        <h2>{auth.configured ? "Welcome back." : "Make yourself at home."}</h2>
-        <p>
-          {auth.configured
-            ? "Sign in to give your screens a little atmosphere."
-            : "Set an administrator password to get your first screen glowing."}
-        </p>
+        <h1>{auth.configured ? "Sign in" : "Set up screensvr"}</h1>
+        {!auth.configured && <p>Create an administrator password.</p>}
         <form onSubmit={(event) => void submit(event)}>
           <label>
             Administrator password
@@ -158,13 +123,14 @@ function Login({
               autoComplete={
                 auth.configured ? "current-password" : "new-password"
               }
+              aria-describedby={auth.configured ? undefined : "password-hint"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          <small>
-            At least 12 characters. Keep this password somewhere safe.
-          </small>
+          {!auth.configured && (
+            <small id="password-hint">At least 12 characters.</small>
+          )}
           {error && (
             <p className="error" role="alert">
               {error}
@@ -172,22 +138,20 @@ function Login({
           )}
           <button className="primary full-width" disabled={busy}>
             {busy
-              ? "One moment…"
+              ? auth.configured
+                ? "Signing in…"
+                : "Setting up…"
               : auth.configured
                 ? "Sign in"
-                : "Create your space"}
-            <Icon name="arrow" />
+                : "Create password"}
           </button>
         </form>
         {!auth.configured && (
           <p className="fine-print">
-            First-run setup claims this server. Complete setup on a trusted
-            network before exposing it to other users.
+            The first person to complete setup becomes the administrator. Set up
+            on a trusted network.
           </p>
         )}
-        <span className="local-note">
-          <Icon name="leaf" /> Self-hosted. Local-first. Entirely yours.
-        </span>
       </section>
     </main>
   );
@@ -257,7 +221,7 @@ function DeviceEditor({
     }
   }
   return (
-    <Dialog title="Set the mood" onClose={onClose} wide>
+    <Dialog title="Display settings" onClose={onClose} wide>
       <div className="editor-layout">
         <section className="editor-preview">
           <div className="preview-screen">
@@ -269,11 +233,8 @@ function DeviceEditor({
               data={preview?.data}
             />
           </div>
-          <span className="preview-label">
-            <span className="status-dot" />
-            LIVE PREVIEW
-          </span>
-          <p>Try something new. Changes go live when you save.</p>
+          <span className="preview-label">Preview</span>
+          {!device.schedule.enabled && <p>Changes apply when saved.</p>}
           {preview?.error && (
             <p className="error" role="alert">
               {preview.error}
@@ -281,7 +242,6 @@ function DeviceEditor({
           )}
         </section>
         <form className="editor-form" onSubmit={(event) => void submit(event)}>
-          <span className="eyebrow">YOUR DISPLAY</span>
           <label>
             Display name
             <input
@@ -305,13 +265,13 @@ function DeviceEditor({
           />
           {device.schedule.enabled ? (
             <p>
-              Scheduling is enabled. Edit faces and data sources under Scenes
-              &amp; schedule.
+              Schedule enabled. Edit faces and data sources in Scenes &amp;
+              schedule.
             </p>
           ) : (
             <>
               <Select
-                label="Screen face"
+                label="Face"
                 value={faceId}
                 onChange={(value) => {
                   setFaceId(value);
@@ -329,17 +289,16 @@ function DeviceEditor({
                   label: face.manifest.name,
                 }))}
               />
-              {faceId !== device.faceId &&
-                Object.keys(device.bindings).length > 0 && (
-                  <p className="integration-warning">
-                    Changing faces clears the previous face’s data sources when
-                    you save.
-                  </p>
-                )}
-              <div className="form-divider" />
-              <span className="eyebrow">MAKE IT YOURS</span>
-              {face.manifest.settings.length === 0 && (
-                <p>This face has no settings.</p>
+              {faceId !== device.faceId && (
+                <p className="integration-warning">
+                  Saving clears the previous face’s settings and data sources.
+                </p>
+              )}
+              {face.manifest.settings.length > 0 && (
+                <>
+                  <div className="form-divider" />
+                  <h3 className="form-section-title">Appearance</h3>
+                </>
               )}
               {face.manifest.settings.map((setting) => (
                 <SettingField
@@ -373,7 +332,6 @@ function DeviceEditor({
             </button>
             <button className="primary" disabled={busy}>
               {busy ? "Saving…" : "Save changes"}
-              <Icon name="arrow" />
             </button>
           </div>
         </form>
@@ -407,12 +365,8 @@ function AddDevice({
     }
   }
   return (
-    <Dialog title="A new place to unwind" onClose={onClose}>
+    <Dialog title="Add display" onClose={onClose}>
       <form className="dialog-body" onSubmit={(event) => void submit(event)}>
-        <p>
-          Give your display a name. Then open its permanent link on your tablet,
-          monitor, or kiosk.
-        </p>
         <label>
           Display name
           <input
@@ -424,7 +378,7 @@ function AddDevice({
           />
         </label>
         <Select
-          label="Start with a face"
+          label="Face"
           value={faceId}
           onChange={setFaceId}
           options={faces.map((face) => ({
@@ -432,9 +386,7 @@ function AddDevice({
             label: face.manifest.name,
           }))}
         />
-        <small>
-          Timezone: {localTimezone}. You can change this in display settings.
-        </small>
+        <small>Timezone: {localTimezone}</small>
         {error && (
           <p className="error" role="alert">
             {error}
@@ -442,7 +394,6 @@ function AddDevice({
         )}
         <button className="primary full-width" disabled={busy}>
           {busy ? "Creating…" : "Create display"}
-          <Icon name="arrow" />
         </button>
       </form>
     </Dialog>
@@ -452,15 +403,9 @@ function AddDevice({
 function DisplayLink({ url, onClose }: { url: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
-    <Dialog title="Your screen is ready" onClose={onClose}>
+    <Dialog title="Display link" onClose={onClose}>
       <div className="dialog-body">
-        <div className="display-link-symbol">
-          <Icon name="display" />
-        </div>
-        <p>
-          Open this permanent address in your display’s browser. You can always
-          find the same link here.
-        </p>
+        <p>Open this URL in your display’s browser.</p>
         <label>
           Display URL
           <input
@@ -480,16 +425,15 @@ function DisplayLink({ url, onClose }: { url: string; onClose: () => void }) {
                 .catch(() => setCopied(false))
             }
           >
-            {copied ? "Copied!" : "Copy link"}
+            {copied ? "Copied" : "Copy link"}
           </button>
           <a className="primary" href={url} target="_blank" rel="noreferrer">
             Open display
-            <Icon name="arrow" />
           </a>
         </div>
         <small>
-          This address stays the same, even if you rename the display. Anyone
-          who can reach this server can view it.
+          Renaming won’t change this URL. Anyone who can reach the server can
+          view it.
         </small>
       </div>
     </Dialog>
@@ -509,7 +453,7 @@ function Install({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
-    <Dialog title="A new face for your space" onClose={onClose}>
+    <Dialog title="Install face" onClose={onClose}>
       <form
         className="dialog-body"
         onSubmit={(event) => {
@@ -529,9 +473,8 @@ function Install({
           </div>
         </div>
         <p>
-          Face packages contain executable JavaScript. We sandbox faces and
-          block their network access, but v0.1 is for{" "}
-          <strong>trusted packages only</strong>.
+          Face packages run JavaScript. Only install packages from sources you
+          trust; sandboxing does not make untrusted code safe.
         </p>
         <label className="trust-check">
           <input
@@ -549,7 +492,6 @@ function Install({
         )}
         <button className="primary full-width" disabled={!trusted || busy}>
           {busy ? "Installing…" : "Install face"}
-          <Icon name="arrow" />
         </button>
       </form>
     </Dialog>
@@ -618,7 +560,7 @@ export function App() {
     return (
       <main className="display-message">
         <span className="wordmark">screensvr</span>
-        <p>{error || "Finding your space…"}</p>
+        <p>{error || "Loading…"}</p>
         {error && <button onClick={() => location.reload()}>Try again</button>}
       </main>
     );
@@ -641,7 +583,6 @@ export function App() {
           <span className="brand-symbol" />
           screensvr
         </a>
-        <span className="workspace-label">YOUR LITTLE CORNER</span>
         <nav aria-label="Main navigation">
           <button
             className={page === "displays" ? "active" : ""}
@@ -665,49 +606,23 @@ export function App() {
             Integrations<span className="nav-count">{integrations.length}</span>
           </button>
         </nav>
-        <div className="sidebar-bottom">
-          <div className="local-card">
-            <Icon name="leaf" />
-            <strong>A little less connected.</strong>
-            <span>
-              <span className="status-dot" /> LOCAL & LOVELY
-            </span>
-          </div>
-          <div className="sidebar-footer">
-            <span>
-              screensvr <span className="version">v0.1</span>
-            </span>
-            <button
-              className="text-button"
-              onClick={() =>
-                void api("/api/auth/logout", { method: "POST" })
-                  .then(() => {
-                    setCSRF("");
-                    setAuth({ configured: true, authenticated: false });
-                  })
-                  .catch((error) => setError(errorMessage(error)))
-              }
-            >
-              Sign out
-            </button>
-          </div>
+        <div className="sidebar-footer">
+          <button
+            className="text-button"
+            onClick={() =>
+              void api("/api/auth/logout", { method: "POST" })
+                .then(() => {
+                  setCSRF("");
+                  setAuth({ configured: true, authenticated: false });
+                })
+                .catch((error) => setError(errorMessage(error)))
+            }
+          >
+            Sign out
+          </button>
         </div>
       </aside>
       <main className="main-content">
-        <header className="topbar">
-          <span>
-            <span className="breadcrumb">Your space</span>
-            <span className="crumb-separator">/</span>
-            {page === "displays"
-              ? "Displays"
-              : page === "faces"
-                ? "Face library"
-                : "Integrations"}
-          </span>
-          <span className="server-status">
-            <span className="status-dot" /> YOUR SELF-HOSTED SPACE
-          </span>
-        </header>
         <div className="page-content">
           {error && (
             <div className="error banner" role="alert">
@@ -720,21 +635,13 @@ export function App() {
           {page !== "integrations" && (
             <section className="page-heading">
               <div>
-                <span className="eyebrow">
-                  {page === "displays"
-                    ? "GOOD THINGS HAPPEN IN THE QUIET."
-                    : "A DIFFERENT KIND OF SCREEN TIME."}
-                </span>
-                <h1>
-                  {page === "displays"
-                    ? "Make room for a little calm."
-                    : "Find your screen’s personality."}
-                </h1>
-                <p>
-                  {page === "displays"
-                    ? "Beautiful, unhurried moments. On every screen you call yours."
-                    : "A collection of little worlds. Pick a face, make it your own."}
-                </p>
+                <h1>{page === "displays" ? "Displays" : "Face library"}</h1>
+                {page === "displays" && devices.length > 0 && (
+                  <p>
+                    {online} online <span className="text-dot">·</span>{" "}
+                    {devices.length - online} offline
+                  </p>
+                )}
               </div>
               <button
                 className="primary"
@@ -743,7 +650,7 @@ export function App() {
                 }
               >
                 <Icon name={page === "displays" ? "plus" : "upload"} />
-                {page === "displays" ? "Add display" : "Install a face"}
+                {page === "displays" ? "Add display" : "Install face"}
               </button>
             </section>
           )}
@@ -758,43 +665,13 @@ export function App() {
             />
           ) : page === "displays" ? (
             <>
-              <div className="section-title">
-                <h2>
-                  Your displays <span>{devices.length}</span>
-                </h2>
-                <span className="muted">
-                  {online} online <span className="text-dot">·</span>{" "}
-                  {devices.length - online} offline
-                </span>
-              </div>
               {devices.length === 0 ? (
                 <section className="empty-state">
-                  <div className="empty-preview">
-                    {faces[0] && (
-                      <FaceFrame
-                        face={faces[0].manifest}
-                        settings={validateSettings(faces[0].manifest, {})}
-                        timezone={localTimezone}
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <span className="eyebrow">ONE SCREEN. A FRESH START.</span>
-                    <h2>
-                      Every idle screen
-                      <br />
-                      has a softer side.
-                    </h2>
-                    <p>
-                      A hallway tablet. A spare monitor. A quiet corner.
-                      <br />
-                      Let’s give yours something beautiful to do.
-                    </p>
-                    <button className="primary" onClick={() => setAdding(true)}>
-                      Connect your first display
-                      <Icon name="arrow" />
-                    </button>
-                  </div>
+                  <h2>No displays</h2>
+                  <p>
+                    Add a display to get a URL for your tablet, monitor, or
+                    kiosk.
+                  </p>
                 </section>
               ) : (
                 <div className="device-grid">
@@ -823,22 +700,26 @@ export function App() {
                         </div>
                         <div className="device-info">
                           <div>
-                            <h3>{device.name}</h3>
+                            <h2>{device.name}</h2>
                             <p>
                               {face?.manifest.name ?? "Unknown face"}
                               <span className="text-dot">·</span>
                               {device.timezone.replaceAll("_", " ")}
                             </p>
-                            <p>
-                              {
-                                device.scenes.find(
-                                  (scene) => scene.id === device.activeSceneId,
-                                )?.name
-                              }
-                              {device.schedule.enabled
-                                ? " · Scheduled"
-                                : " · Manual"}
-                            </p>
+                            {(device.schedule.enabled ||
+                              device.scenes.length > 1) && (
+                              <p>
+                                {
+                                  device.scenes.find(
+                                    (scene) =>
+                                      scene.id === device.activeSceneId,
+                                  )?.name
+                                }
+                                {device.schedule.enabled
+                                  ? " · Scheduled"
+                                  : " · Manual"}
+                              </p>
+                            )}
                           </div>
                           <button
                             className="icon-button"
@@ -885,26 +766,11 @@ export function App() {
                       </article>
                     );
                   })}
-                  <button className="add-card" onClick={() => setAdding(true)}>
-                    <span className="add-circle">
-                      <Icon name="plus" />
-                    </span>
-                    <strong>Room for one more?</strong>
-                    <span>Give another screen a little life.</span>
-                  </button>
                 </div>
               )}
             </>
           ) : (
             <>
-              <div className="section-title">
-                <h2>
-                  Your collection <span>{faces.length}</span>
-                </h2>
-                <span className="muted">
-                  Locally installed. Ready to make yours.
-                </span>
-              </div>
               <div className="face-grid">
                 {faces.map((face) => (
                   <article className="library-card" key={face.manifest.id}>
@@ -915,24 +781,25 @@ export function App() {
                         timezone={localTimezone}
                       />
                       <span className="face-tag">
-                        {face.builtin ? "THE ORIGINALS" : "INSTALLED"}
+                        {face.builtin ? "Built-in" : "Installed"}
                       </span>
                     </div>
                     <div className="library-info">
                       <div>
-                        <h3>{face.manifest.name}</h3>
+                        <h2>{face.manifest.name}</h2>
                         <span className="muted">
-                          by {face.manifest.author ?? "Independent creator"}{" "}
-                          <span className="text-dot">·</span> v
-                          {face.manifest.version}
+                          {face.manifest.author && (
+                            <>
+                              {face.manifest.author}
+                              <span className="text-dot">·</span>
+                            </>
+                          )}
+                          v{face.manifest.version}
                         </span>
                       </div>
                       <p>{face.manifest.description}</p>
-                      <div className="library-footer">
-                        <span>
-                          {face.manifest.settings.length} ways to make it yours
-                        </span>
-                        {!face.builtin && (
+                      {!face.builtin && (
+                        <div className="library-footer">
                           <button
                             className="text-button"
                             onClick={() =>
@@ -945,18 +812,14 @@ export function App() {
                           >
                             Remove
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </article>
                 ))}
               </div>
             </>
           )}
-          <footer className="page-footer">
-            <span>Beautiful screens for idle devices.</span>
-            <span>Slow down. Look up. Stay a while.</span>
-          </footer>
         </div>
       </main>
       <input
@@ -1008,7 +871,7 @@ export function App() {
               body: JSON.stringify(body),
             });
             await load();
-            setNotice("A fresh mood, delivered.");
+            setNotice("Changes saved");
           }}
         />
       )}
@@ -1034,7 +897,7 @@ export function App() {
             await api("/api/faces", { method: "POST", body: form });
             await load();
             setInstalling(undefined);
-            setNotice("A new face has joined your collection.");
+            setNotice("Face installed");
           }}
         />
       )}
@@ -1062,7 +925,11 @@ export function App() {
                   .then(async () => {
                     await load();
                     setRemoving(undefined);
-                    setNotice("Removed from your space.");
+                    setNotice(
+                      removing.type === "devices"
+                        ? "Display removed"
+                        : "Face removed",
+                    );
                   })
                   .catch((error) => {
                     setError(errorMessage(error));
@@ -1071,7 +938,11 @@ export function App() {
                   .finally(() => setRemoveBusy(false));
               }}
             >
-              {removeBusy ? "Removing…" : "Yes, remove"}
+              {removeBusy
+                ? "Removing…"
+                : removing.type === "devices"
+                  ? "Remove display"
+                  : "Remove face"}
             </button>
           </div>
         </Dialog>

@@ -52,7 +52,7 @@ scene and scheduling disabled.
 
 1. Open the display's **Scenes & schedule**.
 2. Choose **New scene**, or select a saved scene and choose **Duplicate scene**.
-3. Give it a name, choose a **Scene face**, and adjust its settings.
+3. Give it a name, choose a **Face**, and adjust its settings.
 4. Select any **Data sources**, check the preview, and choose **Save scene**.
 
 Saving an inactive scene does not put it on screen. Choose **Activate scene**
@@ -133,7 +133,7 @@ explicit per-calendar opt-in; busy-only is the default.
 ## Manage the face library
 
 Open **Face library** to see the included faces and your installed packages.
-Choose **Install a face** to upload a ZIP, confirm that you trust its source,
+Choose **Install face** to upload a ZIP, confirm that you trust its source,
 then select it in a display or scene.
 
 Faces contain executable JavaScript. Only install trusted packages; the browser

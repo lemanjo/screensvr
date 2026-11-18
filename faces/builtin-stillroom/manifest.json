@@ -3,7 +3,7 @@
   "id": "builtin-stillroom",
   "version": "1.0.0",
   "name": "Stillroom",
-  "description": "An expressive serif clock, a little room warmth, and the quiet of a dark evening.",
+  "description": "Serif digital clock with optional room temperature.",
   "author": "screensvr",
   "entry": "index.html",
   "inputs": [
@@ -12,7 +12,7 @@
       "label": "Room temperature",
       "type": "number",
       "quantity": "temperature",
-      "description": "Connect your room's temperature sensor. Missing readings stay quiet; old readings are marked as stale."
+      "description": "Optional room temperature; outdated readings are marked stale."
     }
   ],
   "settings": [
@@ -30,7 +30,7 @@
     },
     {
       "key": "accent",
-      "label": "Quiet accent",
+      "label": "Accent color",
       "type": "color",
       "default": "#98aa9a"
     },
@@ -58,7 +58,7 @@
     },
     {
       "key": "motion",
-      "label": "Gentle ambient movement",
+      "label": "Ambient animation",
       "type": "boolean",
       "default": true
     }

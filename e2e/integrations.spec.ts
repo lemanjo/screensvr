@@ -19,9 +19,7 @@ test("configure Home Assistant, preview a binding, and stream selected data to a
     await page
       .getByLabel("Administrator password")
       .fill("a-long-browser-test-password");
-    await page
-      .getByRole("button", { name: /Create your space|Sign in/ })
-      .click();
+    await page.getByRole("button", { name: /Create password|Sign in/ }).click();
     await page.getByRole("button", { name: /^Integrations/ }).click();
     await page
       .getByRole("button", { name: "Add integration", exact: true })
@@ -55,7 +53,7 @@ test("configure Home Assistant, preview a binding, and stream selected data to a
       .getByRole("button", { name: "Add display", exact: true })
       .click();
     await page.getByLabel("Display name", { exact: true }).fill(name);
-    await page.getByRole("combobox", { name: "Start with a face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page.getByRole("option", { name: "Slow Hours", exact: true }).click();
     await page
       .getByRole("button", { name: "Create display", exact: true })
@@ -131,9 +129,7 @@ test("configure Home Assistant, preview a binding, and stream selected data to a
     await page
       .getByRole("button", { name: `Configure ${name}`, exact: true })
       .click();
-    await page
-      .getByRole("combobox", { name: "Screen face", exact: true })
-      .click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page.getByRole("option", { name: "Stillroom", exact: true }).click();
     const stillroomPreview = page
       .getByRole("dialog")
