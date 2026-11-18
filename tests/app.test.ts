@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { rm, readdir, readFile } from "node:fs/promises";
+import {
+  mkdir,
+  rm,
+  readdir,
+  readFile,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
 import { createApp } from "../src/server/app.js";
 import {
   administrator,
@@ -376,6 +384,46 @@ describe("ZIP faces", () => {
       (await app.inject("/faces/test-face/1.0.0/index.html")).statusCode,
     ).toBe(404);
   });
+  it("does not serve symlink escapes or directories as face assets", async () => {
+    const headers = await administrator(server.app);
+    expect((await upload(server.app, headers, faceZip())).statusCode).toBe(201);
+    const content = path.join(dataDir, "faces/test-face/1.0.0/content");
+    const privateFile = path.join(dataDir, "private.js");
+    await writeFile(privateFile, "private content");
+    await symlink(privateFile, path.join(content, "escape.js"));
+    await mkdir(path.join(content, "directory.js"));
+    for (const asset of ["escape.js", "directory.js"]) {
+      const response = await server.app.inject(
+        `/faces/test-face/1.0.0/${asset}`,
+      );
+      expect(response.statusCode).toBe(404);
+      expect(response.body).not.toContain("private content");
+    }
+  });
+  it("refuses face removal outside the package directory even with corrupted metadata", async () => {
+    const headers = await administrator(server.app);
+    expect((await upload(server.app, headers, faceZip())).statusCode).toBe(201);
+    const protectedDirectory = path.join(dataDir, "protected/1.0.0");
+    await mkdir(protectedDirectory, { recursive: true });
+    const protectedFile = path.join(protectedDirectory, "keep.txt");
+    await writeFile(protectedFile, "keep");
+    server.store.db
+      .prepare("UPDATE faces SET manifest = ? WHERE id = 'test-face'")
+      .run(
+        JSON.stringify({
+          ...testManifest,
+          version: "../../protected/1.0.0",
+        }),
+      );
+    const response = await server.app.inject({
+      method: "DELETE",
+      url: "/api/faces/test-face",
+      headers,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(await readFile(protectedFile, "utf8")).toBe("keep");
+    expect(server.store.face("test-face")).toBeDefined();
+  });
   it.each([
     ["traversal", () => zip([{ name: "../escaped.txt", data: "bad" }])],
     ["absolute paths", () => zip([{ name: "/escaped.txt", data: "bad" }])],
@@ -407,6 +455,18 @@ describe("ZIP faces", () => {
         zip([{ name: "manifest.json", data: JSON.stringify(testManifest) }]),
     ],
     ["invalid JSON", () => zip([{ name: "manifest.json", data: "not JSON" }])],
+    [
+      "oversized manifest",
+      () =>
+        zip([
+          {
+            name: "manifest.json",
+            data: JSON.stringify(testManifest) + " ".repeat(65536),
+          },
+          { name: "index.html", data: "<!doctype html>" },
+        ]),
+    ],
+    ["directory manifest", () => zip([{ name: "manifest.json/", data: "" }])],
     [
       "incompatible protocol",
       () => faceZip({ ...testManifest, schemaVersion: 2 }),

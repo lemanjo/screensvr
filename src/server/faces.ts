@@ -1,5 +1,5 @@
-import { createWriteStream, existsSync, readFileSync, rmSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rename, rm, stat } from "node:fs/promises";
+import { constants, createWriteStream, readFileSync, rmSync } from "node:fs";
+import { mkdir, mkdtemp, open, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable, Transform } from "node:stream";
@@ -72,19 +72,7 @@ export class Faces {
     let reserved = false;
     try {
       await extract(buffer, staging);
-      const manifestPath = path.join(staging, "manifest.json");
-      if (!existsSync(manifestPath) || (await stat(manifestPath)).size > 65536)
-        throw new UserError(
-          "A manifest.json of at most 64 KiB is required at the ZIP root.",
-        );
-      const result = manifestSchema.safeParse(
-        JSON.parse(await readFile(manifestPath, "utf8")),
-      );
-      if (!result.success)
-        throw new UserError(
-          `Invalid face manifest: ${result.error.issues.map((i) => i.message).join(" ")}`,
-        );
-      const manifest = result.data;
+      const manifest = await readManifest(path.join(staging, "manifest.json"));
       if (manifest.id.startsWith("builtin-"))
         throw new UserError("The builtin- prefix is reserved.");
       if (!(await stat(path.join(staging, manifest.entry))).isFile())
@@ -129,11 +117,38 @@ export class Faces {
         "Remove or change every scene using this face before removing it.",
         409,
       );
-    rmSync(path.join(this.directory, id, face.manifest.version), {
+    const directory = path.resolve(this.directory, id, face.manifest.version);
+    if (!directory.startsWith(path.resolve(this.directory) + path.sep))
+      throw new UserError("Invalid face directory.");
+    rmSync(directory, {
       recursive: true,
       force: true,
     });
     this.store.db.prepare("DELETE FROM faces WHERE id = ?").run(id);
+  }
+}
+
+async function readManifest(filename: string) {
+  const file = await open(
+    filename,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || info.size > 65536)
+      throw new UserError(
+        "A manifest.json of at most 64 KiB is required at the ZIP root.",
+      );
+    const result = manifestSchema.safeParse(
+      JSON.parse(await file.readFile("utf8")),
+    );
+    if (!result.success)
+      throw new UserError(
+        `Invalid face manifest: ${result.error.issues.map((i) => i.message).join(" ")}`,
+      );
+    return result.data;
+  } finally {
+    await file.close();
   }
 }
 
