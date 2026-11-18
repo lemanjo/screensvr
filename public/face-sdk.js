@@ -93,6 +93,7 @@
       index,
       count: value.count,
       revision: value.revision,
+      ...(value.credits ? { credit: value.credits[index] } : {}),
     });
   }
   function watchPhotos(key, callback, options = {}) {

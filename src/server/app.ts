@@ -280,6 +280,7 @@ export async function createApp(options: AppOptions) {
         query.index,
         query.width,
         query.height,
+        query.v,
       );
       reply.header("Cache-Control", "no-store");
       // Anonymous CORS permits canvas use inside the opaque-origin sandbox.

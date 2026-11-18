@@ -11,6 +11,7 @@ never your credentials. The face decides how that data looks.
 | [Home Assistant](#home-assistant)               | Sensors, current weather, forecasts, calendars     | Home Assistant 2024.1 or newer and a long-lived access token.     |
 | [Immich](#immich)                               | A photo album owned by or shared with your account | Immich 3.4.1 or later in 3.x and a read-only API key.             |
 | [Mounted photo folders](#mounted-photo-folders) | A local/NAS slideshow or individual photo          | A directory already mounted on the server, readable by screensvr. |
+| [Online backgrounds](#online-backgrounds)       | Curated Wikimedia Commons and NASA albums          | Internet access; no account or API key.                           |
 | [iCalendar feeds](#calendars)                   | The next appointment from a calendar subscription  | A direct read-only `.ics` subscription URL.                       |
 
 The usual workflow is:
@@ -19,6 +20,10 @@ The usual workflow is:
 2. Enter its settings, choose **Test connection**, then **Save integration**.
 3. Open a display or scene with a compatible face.
 4. Choose the source under **Data sources**, preview it, and save.
+
+**Online backgrounds are already enabled.** Skip connection setup and choose
+an album directly in Photo Hours. The built-in connection does not count
+toward the limit of ten custom integrations.
 
 **Check what you publish.** Anyone who can reach a display link can read its
 selected data. Photos expose the whole selected collection; calendar titles
@@ -42,6 +47,79 @@ reads. Inactive scenes do not poll, but their saved selections still:
 Inactive scene configuration is administrator-only. Photo URLs are revoked when
 their scene stops being active. Changing a scene's face clears that scene's
 bindings; switching saved scenes does not.
+
+## Online backgrounds
+
+The built-in **Online backgrounds** integration is **automatically added and
+enabled** on new installations and upgrades. No integration setup, photo
+uploads, API account, or key is needed.
+
+1. Choose **Photo Hours** for a display or scene.
+2. Under **Data sources → Photos**, select **Online backgrounds** and an album, preview,
+   then save.
+
+No album is selected automatically, and no images are fetched until you choose
+one. You can optionally rename, test, disable, or remove the connection under
+**Integrations**. Existing names, bindings, and disabled connections are
+preserved during upgrades; disabled or removed connections stay that way after
+restarts. To restore a removed connection, use **Add integration → Online
+backgrounds**. An existing connection is not duplicated.
+
+The curated picker includes:
+
+- **Wikimedia · Landscapes, Birds, Flowers, Architecture:** selections from
+  Wikimedia Commons' featured-picture categories.
+- **NASA · Nebulae, Earth from space, Planets:** bounded topic selections from
+  NASA's image library. Planets draws from Jupiter, Saturn, and Mars imagery.
+
+Each virtual album contains **up to 48 eligible images**, not the provider's
+entire catalog. Albums can be smaller or empty after filtering. There are no
+custom searches, category URLs, API keys, or cross-provider mixes.
+
+### Credits and content
+
+Photo Hours always displays each online image's title, creator/source credit,
+and license or usage-guidelines link. Credits change when the new image has
+loaded and remain with the previous image if its replacement fails. They are
+independent of the optional clock and cannot be disabled.
+
+Wikimedia selections require complete, supported **CC BY, CC BY-SA, CC0, or
+public-domain** metadata; unsupported licenses, missing credits, and explicit
+additional restrictions are skipped. NASA selections use recognized NASA
+agency/center credits (or historic NASA crew imagery issued by JSC), and skip
+explicitly copyrighted or unrecognized third-party credits. Known chart,
+animation, and artist-concept titles are excluded. Provider metadata is not a
+guarantee of ownership or suitability; follow each image's source and license
+for other uses. NASA images are not endorsements of screensvr.
+
+**These are changing third-party collections, not a guarantee of family-safe
+content.** Preview the selection before using it on a shared screen.
+
+Custom faces must explicitly declare and implement
+[image attribution](faces.md#online-image-attribution) before online albums can
+be selected. Existing folder and Immich photo inputs are unchanged.
+
+### Network use and temporary failures
+
+Automatic setup, saving the connection, opening the album picker, and leaving it unused make
+**no internet requests**. Only active scene selections, administrator previews,
+and explicit connection tests contact the providers. Album metadata is shared
+between consumers of the same connection and refreshed approximately every
+**six hours** while selected. Images are downloaded on demand through screensvr's
+bounded image proxy; tablets do not contact the providers to display photos.
+
+Requests use fixed public HTTPS origins, verified TLS, connection-time public
+DNS checks, no redirects, timeouts, response-size limits, and retry backoff.
+NASA's HTTP manifest links are upgraded to HTTPS. Temporary provider failures
+pause rotation and retain stale selections for at most 24 hours; Photo Hours
+keeps its already-loaded image while a replacement is unavailable.
+
+Metadata and resized images are bounded, memory-only caches. Unused collection
+metadata expires after ten minutes; restarting requires internet access to
+reload selected albums. This is not an offline download library.
+
+Provider references: [Wikimedia reuse guidance](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia),
+[NASA media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
 
 ## Home Assistant
 

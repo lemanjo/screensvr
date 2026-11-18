@@ -34,6 +34,13 @@ const create = z.discriminatedUnion("type", [
   createHomeAssistant,
   z
     .object({
+      type: z.literal("online-backgrounds"),
+      name,
+      enabled: z.boolean().optional(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("ical"),
       name,
       feedUrl: calendarFeedUrl,
@@ -113,12 +120,30 @@ export function integrationRoutes(
   app.get("/api/integrations", admin, async () => integrations.list());
   app.post("/api/integrations", admin, async (request, reply) => {
     const input = create.parse(request.body);
-    if (store.integrations().length >= 10)
-      throw new UserError("At most 10 integrations can be configured.");
+    const connections = store.integrations();
+    if (
+      input.type === "online-backgrounds" &&
+      connections.some((item) => item.type === "online-backgrounds")
+    )
+      throw new UserError(
+        "Online backgrounds are already available. Configure the existing connection instead.",
+        409,
+      );
+    if (
+      input.type !== "online-backgrounds" &&
+      connections.filter((item) => item.type !== "online-backgrounds").length >=
+        10
+    )
+      throw new UserError(
+        "At most 10 custom integrations can be configured, in addition to online backgrounds.",
+      );
     const id = randomUUID();
     let credentials = "";
     try {
-      if (input.type !== "mounted-folder")
+      if (
+        input.type !== "mounted-folder" &&
+        input.type !== "online-backgrounds"
+      )
         credentials = integrations.secrets.encrypt(
           input.type === "ical" ? input.feedUrl : input.token,
         );
@@ -136,11 +161,13 @@ export function integrationRoutes(
         id,
         input.type,
         input.name,
-        input.type === "ical"
-          ? input.timezone
-          : input.type === "mounted-folder"
-            ? input.folder
-            : input.baseUrl,
+        input.type === "online-backgrounds"
+          ? ""
+          : input.type === "ical"
+            ? input.timezone
+            : input.type === "mounted-folder"
+              ? input.folder
+              : input.baseUrl,
         credentials,
         input.enabled === false ? 0 : 1,
       );
@@ -156,6 +183,19 @@ export function integrationRoutes(
       const input = edit.parse(request.body);
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
+      if (
+        row.type === "online-backgrounds" &&
+        [
+          input.baseUrl,
+          input.token,
+          input.folder,
+          input.feedUrl,
+          input.timezone,
+        ].some((value) => value !== undefined)
+      )
+        throw new UserError(
+          "Online backgrounds do not use a URL, token, folder, or timezone.",
+        );
       if (
         (row.type === "ical" &&
           (input.baseUrl !== undefined ||
@@ -234,6 +274,12 @@ export function integrationRoutes(
     },
   );
   app.post("/api/integrations/test", limited, async (request) => {
+    if ((request.body as { type?: string })?.type === "online-backgrounds") {
+      z.object({ type: z.literal("online-backgrounds") })
+        .strict()
+        .parse(request.body);
+      return integrations.testOnline();
+    }
     if ((request.body as { type?: string })?.type === "ical") {
       const input = z
         .object({
@@ -290,6 +336,13 @@ export function integrationRoutes(
       const input = test.parse(request.body ?? {});
       const row = store.integration(request.params.id);
       if (!row) throw new UserError("Integration not found.", 404);
+      if (row.type === "online-backgrounds") {
+        if (Object.keys(input).length)
+          throw new UserError(
+            "Online backgrounds do not use connection settings.",
+          );
+        return integrations.testOnline();
+      }
       if (row.type === "ical") {
         if (
           input.baseUrl !== undefined ||

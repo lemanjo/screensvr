@@ -59,8 +59,9 @@ Browser tests use temporary data rather than your development database.
 ### Integration and device testing
 
 Automated tests use local fake Home Assistant, Immich, and iCalendar servers,
-plus temporary photo fixtures. They need no personal credentials, photo library,
-NAS, or live smart-home services.
+temporary photo fixtures, and mocked Wikimedia/NASA responses. They need no
+personal credentials, photo library, NAS, live smart-home services, or access to
+public image APIs.
 
 Before a release, also verify representative real services and target hardware:
 
@@ -68,6 +69,8 @@ Before a release, also verify representative real services and target hardware:
 - Immich on the supported 3.4.1+ 3.x range, including album permissions and previews.
 - Real iCalendar subscription feeds, recurrence, privacy, and timezones.
 - Mounted photo permissions and missing-source recovery.
+- Wikimedia/NASA album filtering, resized-image delivery, credits, and
+  temporary provider failures.
 - Fully Kiosk/Android sleep/resume, idle activation, and long-running rendering.
 - Scene schedules, DST boundaries, and reconnection after a missed transition.
 

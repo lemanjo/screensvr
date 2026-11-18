@@ -116,7 +116,9 @@ those inputs show the corresponding controls.
 
 - **Slow Hours / Stillroom:** select a Home Assistant room-temperature sensor.
 - **Weather Hours:** select current weather and, optionally, daily/hourly forecasts.
-- **Photo Hours:** select an Immich album, mounted folder, or individual mounted photo.
+- **Photo Hours:** select an Immich album, mounted folder, individual mounted photo,
+  or curated Wikimedia/NASA album from **Online backgrounds**, which is already
+  enabled without integration setup.
 - **Calendar Hours:** select up to eight calendars for the next appointment.
 
 See the [integration guide](integrations.md) for setup and provider requirements.

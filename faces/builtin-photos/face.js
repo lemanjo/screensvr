@@ -7,6 +7,20 @@ let generation = 0;
 let retry;
 const photo = document.getElementById("photo");
 const placeholder = document.getElementById("placeholder");
+const credit = document.getElementById("credit");
+
+function showCredit(value) {
+  credit.hidden = !value;
+  document.getElementById("credit-title").textContent = value?.title ?? "";
+  document.getElementById("credit-author").textContent =
+    value?.attribution ?? "";
+  for (const name of ["source", "license"]) {
+    const link = document.getElementById(`credit-${name}`);
+    link.textContent = value?.[name] ?? "";
+    if (value) link.href = value[`${name}Url`];
+    else link.removeAttribute("href");
+  }
+}
 
 function showPhoto(image) {
   clearTimeout(retry);
@@ -16,6 +30,7 @@ function showPhoto(image) {
     photo.hidden = true;
     photo.removeAttribute("src");
     placeholder.hidden = false;
+    showCredit(null);
     return;
   }
   // Keep the previous image visible until its replacement has fully loaded.
@@ -25,6 +40,7 @@ function showPhoto(image) {
     photo.src = image.url;
     photo.hidden = false;
     placeholder.hidden = true;
+    showCredit(image.credit);
   };
   next.onerror = () => {
     if (current !== generation) return;

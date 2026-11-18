@@ -18,6 +18,7 @@ import { Secrets } from "../integration-key.js";
 import { Photos, type PhotoScope } from "../photos.js";
 import { MountedFolder } from "./mounted-folder.js";
 import { Immich } from "./immich.js";
+import { OnlineBackgrounds } from "./online-backgrounds.js";
 import { HomeAssistant } from "./home-assistant.js";
 import { Calendars } from "./calendars.js";
 import { feedUrl, calendarTimezone } from "./calendar-http.js";
@@ -124,7 +125,7 @@ export class Integrations {
     let token: string;
     try {
       token =
-        row.type !== "mounted-folder"
+        row.type !== "mounted-folder" && row.type !== "online-backgrounds"
           ? this.secrets.decrypt(row.credentials)
           : "";
     } catch (error) {
@@ -144,15 +145,17 @@ export class Integrations {
       const client =
         row.type === "mounted-folder"
           ? new MountedFolder(this.photosDirectory, row.base_url)
-          : await (row.type === "immich" ? Immich.connect : this.connect)(
-              row.base_url,
-              token,
-              (error) => {
-                if (runtime.connectionGeneration === generation)
-                  this.failed(row, runtime, error);
-              },
-              runtime.abort.signal,
-            );
+          : row.type === "online-backgrounds"
+            ? new OnlineBackgrounds()
+            : await (row.type === "immich" ? Immich.connect : this.connect)(
+                row.base_url,
+                token,
+                (error) => {
+                  if (runtime.connectionGeneration === generation)
+                    this.failed(row, runtime, error);
+                },
+                runtime.abort.signal,
+              );
       if (client instanceof MountedFolder) await client.confirm();
       if (
         !this.current(row.id, runtime) ||
@@ -327,7 +330,9 @@ export class Integrations {
           ? { type: "ical" as const, timezone: row.base_url }
           : row.type === "mounted-folder"
             ? { type: "mounted-folder" as const, folder: row.base_url }
-            : { type: row.type, baseUrl: row.base_url }),
+            : row.type === "online-backgrounds"
+              ? { type: "online-backgrounds" as const }
+              : { type: row.type, baseUrl: row.base_url }),
         enabled: Boolean(row.enabled),
         revision: row.revision,
         hasCredentials: Boolean(row.credentials),
@@ -473,6 +478,14 @@ export class Integrations {
         throw new UserError("Choose calendars explicitly for this input.");
       if (!this.store.integration(binding.integrationId))
         throw new UserError("Integration not found.", 404);
+      if (
+        this.store.integration(binding.integrationId)?.type ===
+          "online-backgrounds" &&
+        (faceInput.type !== "image" || !faceInput.attribution)
+      )
+        throw new UserError(
+          "Online backgrounds require an image input that displays attribution. Choose Photo Hours or an attribution-capable face.",
+        );
       const old = previous[key];
       if (
         old &&
@@ -554,6 +567,12 @@ export class Integrations {
             return [input.key, emptyDatum(input, "unavailable")];
           const runtime = this.runtimes.get(binding.integrationId);
           if (!this.store.integration(binding.integrationId)?.enabled)
+            return [input.key, emptyDatum(input, "unavailable")];
+          if (
+            this.store.integration(binding.integrationId)?.type ===
+              "online-backgrounds" &&
+            (input.type !== "image" || !input.attribution)
+          )
             return [input.key, emptyDatum(input, "unavailable")];
           const value = overrides?.has(binding.integrationId)
             ? overrides.get(binding.integrationId)!.get(binding.sourceId)
@@ -719,6 +738,27 @@ export class Integrations {
         error instanceof ConnectorError
           ? error.message
           : "Cannot read the photo folder.",
+        502,
+      );
+    } finally {
+      client.close();
+      this.operations.delete(operation);
+    }
+  }
+  async testOnline() {
+    if (this.operations.size >= 4)
+      throw new UserError("Too many connection tests. Try again shortly.", 429);
+    const operation = new AbortController();
+    const client = new OnlineBackgrounds();
+    this.operations.add(operation);
+    operation.signal.addEventListener("abort", () => client.close(), {
+      once: true,
+    });
+    try {
+      return await client.test();
+    } catch {
+      throw new UserError(
+        "Could not reach Wikimedia and NASA. Check internet access and try again later.",
         502,
       );
     } finally {

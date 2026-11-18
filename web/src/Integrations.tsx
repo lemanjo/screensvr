@@ -6,10 +6,12 @@ import { Select } from "./Select.js";
 
 function IntegrationEditor({
   integration,
+  onlineBackgroundsExists,
   onClose,
   onSaved,
 }: {
   integration: Integration | null;
+  onlineBackgroundsExists: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -19,8 +21,7 @@ function IntegrationEditor({
   );
   const [baseUrl, setBaseUrl] = useState(
     integration &&
-      integration.type !== "mounted-folder" &&
-      integration.type !== "ical"
+      (integration.type === "home-assistant" || integration.type === "immich")
       ? integration.baseUrl
       : "",
   );
@@ -39,11 +40,13 @@ function IntegrationEditor({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const provider =
-    type === "ical"
-      ? "iCalendar"
-      : type === "immich"
-        ? "Immich"
-        : "Home Assistant";
+    type === "online-backgrounds"
+      ? "Online backgrounds"
+      : type === "ical"
+        ? "iCalendar"
+        : type === "immich"
+          ? "Immich"
+          : "Home Assistant";
   async function test() {
     setBusy(true);
     setError("");
@@ -57,11 +60,13 @@ function IntegrationEditor({
           method: "POST",
           body: JSON.stringify({
             ...(integration ? {} : { type }),
-            ...(type === "ical"
-              ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
-              : type === "mounted-folder"
-                ? { folder }
-                : { baseUrl, ...(token ? { token: token.trim() } : {}) }),
+            ...(type === "online-backgrounds"
+              ? {}
+              : type === "ical"
+                ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
+                : type === "mounted-folder"
+                  ? { folder }
+                  : { baseUrl, ...(token ? { token: token.trim() } : {}) }),
           }),
         },
       );
@@ -87,13 +92,15 @@ function IntegrationEditor({
           body: JSON.stringify({
             ...(integration ? { revision: integration.revision } : { type }),
             name,
-            ...(type === "ical"
-              ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
-              : type === "mounted-folder"
-                ? { folder }
-                : { baseUrl }),
+            ...(type === "online-backgrounds"
+              ? {}
+              : type === "ical"
+                ? { timezone, ...(feedUrl ? { feedUrl } : {}) }
+                : type === "mounted-folder"
+                  ? { folder }
+                  : { baseUrl }),
             enabled,
-            ...(type !== "mounted-folder" && type !== "ical" && token
+            ...((type === "home-assistant" || type === "immich") && token
               ? { token: token.trim() }
               : {}),
           }),
@@ -128,8 +135,13 @@ function IntegrationEditor({
               { value: "home-assistant", label: "Home Assistant" },
               { value: "mounted-folder", label: "Mounted photo folders" },
               { value: "immich", label: "Immich" },
+              { value: "online-backgrounds", label: "Online backgrounds" },
               { value: "ical", label: "iCalendar feed" },
-            ]}
+            ].filter(
+              (option) =>
+                option.value !== "online-backgrounds" ||
+                !onlineBackgroundsExists,
+            )}
             onChange={(value) => {
               setType(value as Integration["type"]);
               setBaseUrl("");
@@ -137,13 +149,15 @@ function IntegrationEditor({
               setFeedUrl("");
               setFolder("");
               setName(
-                value === "mounted-folder"
-                  ? "Photo folders"
-                  : value === "ical"
-                    ? "Calendar"
-                    : value === "immich"
-                      ? "Immich"
-                      : "Home Assistant",
+                value === "online-backgrounds"
+                  ? "Online backgrounds"
+                  : value === "mounted-folder"
+                    ? "Photo folders"
+                    : value === "ical"
+                      ? "Calendar"
+                      : value === "immich"
+                        ? "Immich"
+                        : "Home Assistant",
               );
               setError("");
               setNotice("");
@@ -151,13 +165,15 @@ function IntegrationEditor({
           />
         )}
         <p>
-          {type === "ical"
-            ? "Subscribe to one read-only calendar feed. Choose which displays receive it separately. The full subscription URL is a secret and stays encrypted on the server."
-            : type === "mounted-folder"
-              ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
-              : type === "immich"
-                ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
-                : "Connect once, then choose which sensors, weather entities, or calendars each display receives. Faces never receive your access token."}
+          {type === "online-backgrounds"
+            ? "Included and enabled by default: curated photo albums from Wikimedia Commons and NASA. No account or API key needed. Choose an album in each display’s Data sources. Only selected albums are fetched; internet access is required. Photo Hours shows image credits automatically."
+            : type === "ical"
+              ? "Subscribe to one read-only calendar feed. Choose which displays receive it separately. The full subscription URL is a secret and stays encrypted on the server."
+              : type === "mounted-folder"
+                ? "Read photos from your server’s photo directory. Choose a folder or individual image separately for each display."
+                : type === "immich"
+                  ? "Connect Immich 3.4.1 or newer in 3.x, then choose an album separately for each display. Faces never receive your API key."
+                  : "Connect once, then choose which sensors, weather entities, or calendars each display receives. Faces never receive your access token."}
         </p>
         <label>
           Connection name
@@ -168,7 +184,14 @@ function IntegrationEditor({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        {type === "ical" ? (
+        {type === "online-backgrounds" ? (
+          <small>
+            Includes landscapes, birds, flowers, architecture, nebulae, Earth
+            from space, and planets. These are changing third-party collections,
+            not a guarantee of family-safe content. Required credits cannot be
+            turned off.
+          </small>
+        ) : type === "ical" ? (
           <>
             <label>
               Subscription URL
@@ -303,6 +326,7 @@ function IntegrationEditor({
               (type === "ical"
                 ? !timezone || (!integration && !feedUrl)
                 : type !== "mounted-folder" &&
+                  type !== "online-backgrounds" &&
                   (!baseUrl || (!integration && !token)))
             }
             onClick={() => void test()}
@@ -383,8 +407,9 @@ export function IntegrationsPage({
           <div>
             <h2>A connection to your home.</h2>
             <p>
-              Add Home Assistant, an iCalendar feed, Immich, or mounted photo
-              folders, then choose a source in a display’s settings.
+              Add Home Assistant, an iCalendar feed, Immich, mounted photo
+              folders, or online backgrounds, then choose a source in a
+              display’s settings.
             </p>
             <button className="primary" onClick={() => setEditing(null)}>
               Add your first integration
@@ -404,13 +429,15 @@ export function IntegrationsPage({
               </span>
             </div>
             <p className="muted">
-              {integration.type === "ical"
-                ? `iCalendar · ${integration.timezone} · subscription URL hidden`
-                : integration.type === "home-assistant"
-                  ? `Home Assistant · ${integration.baseUrl}`
-                  : integration.type === "immich"
-                    ? `Immich · ${integration.baseUrl}`
-                    : `Mounted photos · ${integration.folder || "All folders"}`}
+              {integration.type === "online-backgrounds"
+                ? "Online backgrounds · Wikimedia Commons & NASA · no API key"
+                : integration.type === "ical"
+                  ? `iCalendar · ${integration.timezone} · subscription URL hidden`
+                  : integration.type === "home-assistant"
+                    ? `Home Assistant · ${integration.baseUrl}`
+                    : integration.type === "immich"
+                      ? `Immich · ${integration.baseUrl}`
+                      : `Mounted photos · ${integration.folder || "All folders"}`}
             </p>
             {integration.error && <p className="error">{integration.error}</p>}
             <div className="integration-usage">
@@ -464,6 +491,9 @@ export function IntegrationsPage({
         <IntegrationEditor
           key={editing?.id ?? "new"}
           integration={editing}
+          onlineBackgroundsExists={integrations.some(
+            (integration) => integration.type === "online-backgrounds",
+          )}
           onClose={() => setEditing(undefined)}
           onSaved={onChanged}
         />

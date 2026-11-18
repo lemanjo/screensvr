@@ -22,6 +22,7 @@ type Grant = {
   inputKey: string;
   binding: SourceBinding;
   integrationRevision: number;
+  collectionRevision: string;
   expires: number;
 };
 const sizes = [320, 640, 1280, 1920, 2560];
@@ -44,7 +45,13 @@ export class Photos {
     scope: PhotoScope,
   ): PhotoValue {
     const row = this.store.integration(binding.integrationId)!;
-    const key = JSON.stringify([scope, inputKey, binding, row.revision]);
+    const key = JSON.stringify([
+      scope,
+      inputKey,
+      binding,
+      row.revision,
+      value.revision,
+    ]);
     let token = this.keys.get(key);
     const existing = token && this.grants.get(token);
     if (!existing || existing.expires < Date.now() + 60000) {
@@ -60,6 +67,7 @@ export class Photos {
         inputKey,
         binding,
         integrationRevision: row.revision,
+        collectionRevision: value.revision,
         expires: Date.now() + 10 * 60000,
       });
       this.keys.set(key, token);
@@ -99,15 +107,30 @@ export class Photos {
     }
     return grant;
   }
-  async image(token: string, index: number, width: number, height: number) {
+  async image(
+    token: string,
+    index: number,
+    width: number,
+    height: number,
+    revision?: string,
+  ) {
     const grant = this.authorized(token);
     const client = grant && this.client(grant.binding.integrationId);
-    if (!grant || !client) throw new UserError("Photo unavailable.", 404);
+    if (
+      !grant ||
+      !client ||
+      (revision !== undefined && revision !== grant.collectionRevision)
+    )
+      throw new UserError("Photo unavailable.", 404);
     if (this.active >= 4)
       throw new UserError("Too many photo requests. Try again shortly.", 429);
     this.active++;
     try {
-      const photo = await client.read(grant.binding.sourceId, index);
+      const photo = await client.read(
+        grant.binding.sourceId,
+        index,
+        grant.collectionRevision,
+      );
       try {
         const key = `${grant.binding.integrationId}:${grant.integrationRevision}:${photo.key}:${bucket(width)}:${bucket(height)}`;
         let bytes = this.cache.get(key);

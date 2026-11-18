@@ -21,7 +21,8 @@ from one web interface. No screensvr cloud account or subscription is needed.
 - **Let the day set the scene.** Save different looks and switch between them on
   a weekly schedule: photos by day, a quiet clock in the evening, and a dim night clock.
 - **Bring your photos.** Play an Immich album or a slideshow from a read-only
-  local/NAS photo folder, with an optional clock.
+  local/NAS photo folder, or choose curated Wikimedia and NASA backgrounds—all
+  with an optional clock.
 - **Connect useful details.** Show Home Assistant temperatures and weather, or
   your next appointment from Home Assistant calendars and iCalendar feeds.
   Calendar titles are private unless you explicitly choose to publish them.
@@ -144,15 +145,17 @@ step-by-step example. Night mode dims the page, not the tablet's backlight.
 
 ### Connect photos, weather, and calendars
 
-Open **Integrations** to add a connection, then choose what to show under a
-display or scene's **Data sources**. Trying a selection changes only the preview;
-saving an active scene updates the screen.
+**Online backgrounds is already enabled:** choose a Wikimedia or NASA album
+under Photo Hours' **Data sources**. For your own services, open **Integrations**
+to add a connection first. Trying a selection changes only the preview; saving
+an active scene updates the screen.
 
 | Source              | What you can show                                               | Setup                                                               |
 | ------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Home Assistant      | Sensors, current weather, forecasts, and calendars              | [Home Assistant](docs/integrations.md#home-assistant)               |
 | Immich              | An owned or shared album; requires Immich 3.4.1 or later in 3.x | [Immich](docs/integrations.md#immich)                               |
 | Local or NAS folder | A photo slideshow or one selected image                         | [Mounted photo folders](docs/integrations.md#mounted-photo-folders) |
+| Online backgrounds  | Curated Wikimedia Commons and NASA albums; no API key           | [Online backgrounds](docs/integrations.md#online-backgrounds)       |
 | iCalendar feed      | Your next appointment from a read-only subscription             | [Calendars](docs/integrations.md#calendars)                         |
 
 Credentials stay on the server. Faces receive only the data you select, never

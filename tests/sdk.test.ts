@@ -5,6 +5,7 @@ import { frameData } from "../web/src/face-data.js";
 import { newerSnapshot } from "../web/src/snapshots.js";
 import type { DisplayState } from "../src/shared/contracts.js";
 import type { FaceData } from "../src/shared/face-data.js";
+import type { PhotoCredit } from "../src/shared/photo-credit.js";
 import { testManifest } from "./helpers.js";
 
 const source = readFileSync(
@@ -12,7 +13,13 @@ const source = readFileSync(
   "utf8",
 );
 type Update = { config: Record<string, unknown>; data: FaceData };
-type Photo = { url: string; index: number; count: number; revision: string };
+type Photo = {
+  url: string;
+  index: number;
+  count: number;
+  revision: string;
+  credit?: PhotoCredit;
+};
 function sdk(protocols?: number[]) {
   const parent = {};
   const windowEvents = new Map<string, (event: unknown) => void>();
@@ -285,6 +292,51 @@ it("bounds v3 frame descriptors to public fields and rejects external image URLs
     url: string;
   };
   data.photos.value = { ...value, url: "https://example.com/private.jpg" };
+  expect(frameData(face, data).photos.status).toBe("unavailable");
+});
+it("projects bounded per-image provenance and keeps SDK credits aligned with the selected index", () => {
+  const credit: PhotoCredit = {
+    title: "A landscape",
+    attribution: "A. Photographer",
+    source: "Wikimedia Commons",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Landscape.jpg",
+    license: "CC BY-SA 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+  };
+  const face = {
+    ...testManifest,
+    schemaVersion: 3 as const,
+    inputs: [
+      {
+        key: "photos",
+        label: "Photos",
+        type: "image" as const,
+        attribution: true as const,
+      },
+    ],
+  };
+  const data = photoData(2);
+  const value = data.photos.value as {
+    count: number;
+    revision: string;
+    url: string;
+    credits?: PhotoCredit[];
+  };
+  value.credits = [
+    { ...credit, private: "not public" } as PhotoCredit,
+    { ...credit, title: "A second landscape" },
+  ];
+  const projected = frameData(face, data);
+  expect(JSON.stringify(projected)).not.toContain("not public");
+  const client = sdk([3]);
+  client.connect();
+  client.send(projected);
+  const photo = client.window.screensvr.photos.get("photos", { index: 1 })!;
+  expect(photo.credit!.title).toBe("A second landscape");
+  expect(Object.isFrozen(photo.credit)).toBe(true);
+  value.credits[0] = { ...credit, sourceUrl: "javascript:alert(1)" };
+  expect(frameData(face, data).photos.status).toBe("unavailable");
+  value.credits = [credit];
   expect(frameData(face, data).photos.status).toBe("unavailable");
 });
 it("negotiates v4, freezes structured weather and expires forecasts independently", () => {

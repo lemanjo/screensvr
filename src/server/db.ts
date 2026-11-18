@@ -8,7 +8,12 @@ import { resolveSchedule } from "./scheduler.js";
 
 export type IntegrationRow = {
   id: string;
-  type: "home-assistant" | "mounted-folder" | "immich" | "ical";
+  type:
+    | "home-assistant"
+    | "mounted-folder"
+    | "immich"
+    | "ical"
+    | "online-backgrounds";
   name: string;
   base_url: string;
   credentials: string;
@@ -214,6 +219,30 @@ export class Store {
         PRAGMA user_version = 5;
         COMMIT;
       `);
+    }
+    // Provision once, including upgrades. The marker preserves explicit opt-outs:
+    // disabling or removing the connection must survive future restarts.
+    if (!this.getMeta("online-backgrounds-provisioned")) {
+      this.db.exec("BEGIN IMMEDIATE;");
+      try {
+        this.db
+          .prepare(
+            `INSERT INTO integrations (id, type, name, base_url, credentials, enabled)
+             SELECT ?, 'online-backgrounds', 'Online backgrounds', '', '', 1
+             WHERE NOT EXISTS (SELECT 1 FROM integrations WHERE type = 'online-backgrounds')`,
+          )
+          .run(randomUUID());
+        this.db
+          .prepare(
+            "INSERT OR IGNORE INTO meta (key, value) VALUES ('online-backgrounds-provisioned', '1')",
+          )
+          .run();
+        this.db.exec("COMMIT;");
+      } catch (error) {
+        this.db.exec("ROLLBACK;");
+        this.db.close();
+        throw error;
+      }
     }
   }
 
