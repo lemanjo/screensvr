@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { rm, readdir } from "node:fs/promises";
+import { rm, readdir, readFile } from "node:fs/promises";
 import { createApp } from "../src/server/app.js";
 import {
   administrator,
@@ -19,6 +19,22 @@ beforeEach(async () => {
 afterEach(async () => {
   await server?.app.close();
   if (dataDir) await rm(dataDir, { recursive: true, force: true });
+});
+
+describe("health", () => {
+  it("reports the application version consistently with both package manifests", async () => {
+    const pkg = JSON.parse(
+      await readFile(new URL("../package.json", import.meta.url), "utf8"),
+    );
+    const lock = JSON.parse(
+      await readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+    );
+    const response = await server.app.inject("/api/health");
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ok", version: pkg.version });
+    expect(lock.version).toBe(pkg.version);
+    expect(lock.packages[""].version).toBe(pkg.version);
+  });
 });
 
 describe("administrator security", () => {
