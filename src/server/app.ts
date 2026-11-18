@@ -4,8 +4,8 @@ import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import staticFiles from "@fastify/static";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants, existsSync, mkdirSync } from "node:fs";
+import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { validateSettings } from "../shared/contracts.js";
@@ -204,7 +204,7 @@ export async function createApp(options: AppOptions) {
   });
   app.addHook("onClose", async () => store.db.close());
 
-  app.get("/api/health", async () => ({ status: "ok", version: "0.1.0" }));
+  app.get("/api/health", async () => ({ status: "ok", version: "1.0.0" }));
   app.get("/api/auth/status", async (request) => ({
     configured: Boolean(store.getMeta("password")),
     authenticated: Boolean(security.session(request)),
@@ -507,17 +507,24 @@ export async function createApp(options: AppOptions) {
       if (!contentType) throw new UserError("Unsupported asset type.", 404);
       try {
         const real = await realpath(filename);
-        if (
-          !real.startsWith((await realpath(rootDir)) + path.sep) ||
-          !(await stat(real)).isFile()
-        )
+        if (!real.startsWith((await realpath(rootDir)) + path.sep))
           throw new UserError("Invalid asset.", 404);
-        reply.header("Content-Security-Policy", FACE_CSP);
-        // Sandboxed faces have opaque origins. Anonymous module/font requests
-        // need CORS, but only public face assets (never APIs) are readable.
-        reply.header("Access-Control-Allow-Origin", "*");
-        reply.header("Cache-Control", "no-store");
-        return reply.type(contentType).send(await readFile(real));
+        const file = await open(
+          real,
+          constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+        );
+        try {
+          if (!(await file.stat()).isFile())
+            throw new UserError("Invalid asset.", 404);
+          reply.header("Content-Security-Policy", FACE_CSP);
+          // Sandboxed faces have opaque origins. Anonymous module/font requests
+          // need CORS, but only public face assets (never APIs) are readable.
+          reply.header("Access-Control-Allow-Origin", "*");
+          reply.header("Cache-Control", "no-store");
+          return reply.type(contentType).send(await file.readFile());
+        } finally {
+          await file.close();
+        }
       } catch (error) {
         if (error instanceof UserError) throw error;
         throw new UserError("Face asset not found.", 404);
