@@ -1,38 +1,47 @@
 # screensvr
 
-**A screensaver for your wall-mounted smart home tablet.**
+**A calmer idle screen for your smart home tablet.**
 
-screensvr is a self-hosted web app that gives your home automation tablet
-something beautiful to show when it is not in use. Instead of leaving your
-dashboard on screen all day, show a simple clock, soft colors, and gentle
-animation.
+Turn an unused dashboard into a quiet clock, a photo frame, or a glance at the
+weather and your next appointment. screensvr is a self-hosted web app designed
+for **[Fully Kiosk Browser](https://www.fully-kiosk.com/)**, and works in other
+modern browsers too.
 
-It is designed for **[Fully Kiosk Browser](https://www.fully-kiosk.com/)**, which
-can open a web page as a screensaver. Keep Home Assistant or another dashboard as
-your normal page, and use screensvr when the tablet is idle. Fully Kiosk handles
-when the screensaver starts and when to return to your dashboard.
+Run it on your home server, give each display its own link, and manage everything
+from one web interface. No screensvr cloud account or subscription is needed.
 
-Run screensvr on a server in your home network, then manage all your displays
-from one web interface. Each display has its own link and a choice of customizable
-designs, called **screen faces**. Preview a face, adjust its settings, and save:
-connected displays update automatically. Your settings and installed faces stay
-on your server, with no cloud account needed.
+![The screensvr dashboard with three displays using different clock faces](docs/images/displays.png)
 
-![The screensvr management dashboard showing three connected displays with different clock faces](docs/images/displays.png)
+## What you can do
 
-## Deployment
+- **Choose your atmosphere.** Eight included designs, called **faces**, cover
+  digital and analog clocks, gentle gradients, photos, weather, and calendars.
+- **Manage every display in one place.** Give each screen its own face, settings,
+  and timezone. Preview changes before saving; connected screens update automatically.
+- **Let the day set the scene.** Save different looks and switch between them on
+  a weekly schedule: photos by day, a quiet clock in the evening, and a dim night clock.
+- **Bring your photos.** Play an Immich album or a slideshow from a read-only
+  local/NAS photo folder, with an optional clock.
+- **Connect useful details.** Show Home Assistant temperatures and weather, or
+  your next appointment from Home Assistant calendars and iCalendar feeds.
+  Calendar titles are private unless you explicitly choose to publish them.
+- **Make it your own.** Install custom face ZIPs without rebuilding the server,
+  or build a face with ordinary HTML, CSS, and JavaScript.
 
-Choose one of the following options. All three run the app on port **3000**.
+## Quick start
 
-### Use the prebuilt container (recommended)
+You need a server reachable from your tablet and **Docker with Docker Compose**.
+Published images support **Linux amd64**. For ARM or a Node.js installation,
+see [other installation options](docs/deployment.md#other-installation-options).
 
-Requires Docker with Docker Compose. Create a directory for screensvr and save
-the following as `compose.yaml` inside it:
+### 1. Start screensvr
+
+Create a directory and save this as `compose.yaml`:
 
 ```yaml
 services:
   screensvr:
-    image: ghcr.io/lemanjo/screensvr:v0.1.0
+    image: ghcr.io/lemanjo/screensvr:v1.0.0
     ports:
       - "3000:3000"
     volumes:
@@ -48,218 +57,125 @@ volumes:
   screensvr-data:
 ```
 
-From that directory, start the app:
+Then run from that directory:
 
 ```sh
 docker compose up -d
 ```
 
-Images are published to GitHub Container Registry (GHCR). The example pins
-**v0.1.0**; see [releases](https://github.com/lemanjo/screensvr/releases) for
-available versions. Published images currently support **Linux amd64**. For ARM
-servers, build the container from source using the next option.
+This example targets **1.0.0**; its image is available after the release workflow
+successfully publishes it. Check [releases](https://github.com/lemanjo/screensvr/releases)
+for published versions.
 
-### Build the container locally
+### 2. Create your first display
 
-Requires Git and Docker with Docker Compose. Clone the source and build it on
-your server:
-
-```sh
-git clone https://github.com/lemanjo/screensvr.git
-cd screensvr
-docker compose up --build -d
-```
-
-The repository includes a `compose.yaml`, so no extra configuration is needed.
-
-### Run locally with Node.js
-
-Requires Git and **Node.js 24 LTS**. No Docker is needed.
-
-```sh
-git clone https://github.com/lemanjo/screensvr.git
-cd screensvr
-npm ci
-npm run build
-npm start
-```
-
-**Keep your data:** Both container options store settings, authentication, and
-installed faces in the `screensvr-data` volume. Node.js uses the `data/` directory
-by default. Keep this storage when upgrading. See
-[deployment and backups](docs/deployment.md) for environment variables, HTTPS,
-backups, and container image verification.
-
-## Set up your tablet
-
-1. Open `http://YOUR_SERVER_IP:3000` in a browser. If you are on the server itself,
-   you can use **http://localhost:3000**.
+1. Open **`http://YOUR_SERVER_IP:3000`** in a browser.
 2. Create an administrator password with at least 12 characters.
 3. Choose **Add display**, give it a name such as **Living room**, and pick a face.
 4. Copy its **Display URL**, for example
    `http://YOUR_SERVER_IP:3000/display/living-room`.
 
-Use your server's network IP address or hostname in the tablet's link, not
-`localhost`. You can retrieve the link later with **Display link**. It stays the
-same even if you rename the display, and the tablet does not need an
-administrator login.
+Use your server's network address in the tablet's link, not `localhost`. The
+display does not need an administrator login, and its link stays the same if
+you rename it. Retrieve it later with **Display link**.
 
-### Schedule scenes
+> **Set up on a trusted network.** The first person to complete setup becomes the
+> administrator. Anyone who can reach the server can view display links and their
+> selected data, including photos and published appointments. Management requires
+> your password. See [secure deployment](docs/deployment.md#reverse-proxies)
+> before making the server reachable outside your home.
 
-Open a display's **Scenes & schedule** to save different looks. Each scene keeps
-its own face, settings, and data sources. Creating or editing an inactive scene
-does not change the live screen; switching back restores its saved selections.
-Scenes belong to one display, not a shared library.
+### 3. Set up Fully Kiosk
 
-Under **Weekly schedule**, choose weekdays, a start time, and a scene. For example:
+Keep your usual dashboard as Fully Kiosk's **Start URL**. On the tablet:
 
-| Days      | Start | Scene          |
-| --------- | ----- | -------------- |
-| Mon–Fri   | 07:00 | Daytime photos |
-| Sat–Sun   | 09:00 | Daytime photos |
-| Every day | 19:00 | Evening clock  |
-| Every day | 23:00 | Night clock    |
+1. Open **Settings → Screensaver**.
+2. Set **Screensaver Wallpaper URL** to your screensvr display link.
+3. Set **Screensaver Timer** to your preferred idle time, such as 60 seconds.
+4. Leave **Screensaver Playlist** empty to use only the screensvr page.
 
-Times use the display's timezone. A scene stays active until the next entry,
-including overnight and on days without entries. Enabling a schedule immediately
-selects the current scene. Disable scheduling before manually activating a scene;
-disabling keeps the scene currently on screen. Existing displays start with a
-**Default** scene and scheduling disabled.
+Fully Kiosk's screensaver feature requires **Fully PLUS**. Fully Kiosk controls
+idle activation, returning to your dashboard, hardware brightness, and screen
+power—not screensvr. See the
+[Fully Kiosk screensaver settings](https://www.fully-kiosk.com/docs/en/configuration/screensaver).
 
-**Add night clock** creates a Slow Hours scene with a black background, dim
-numerals, and no glow, seconds, or decorative content. This changes the rendered
-page, not the tablet's backlight. Configure hardware brightness and screen power
-in Fully Kiosk or on the device.
+You can also open the display link in another modern browser and use fullscreen
+mode on a tablet or monitor.
 
-During daylight-saving spring-forward gaps, skipped entries apply at the clock
-jump, with the latest skipped start winning. During a repeated autumn hour,
-entries apply at their first occurrence only. Scheduling runs on the server:
-connected screens update automatically, and sleeping or disconnected screens
-resynchronize when they reconnect. A disconnected screen keeps its current face;
-offline scheduling and offline cold starts are not supported.
+**Keep your data:** The `screensvr-data` volume holds your settings, installed
+faces, and encrypted integration credentials. Preserve it when upgrading.
+See [upgrades and backups](docs/deployment.md#upgrading).
 
-### Use it as a Fully Kiosk screensaver
+## Find your face
 
-On your tablet, keep your usual dashboard as Fully Kiosk's **Start URL**. Then:
+All eight faces are included. Clocks work without an integration; connect a data
+source when you want photos, sensor readings, weather, or appointments.
 
-1. Open Fully Kiosk's **Settings → Screensaver**.
-2. Set **Screensaver Wallpaper URL** to the display link you copied.
-3. Set **Screensaver Timer** to your preferred idle time, for example 60 seconds.
-4. Leave **Screensaver Playlist** empty if you only want the screensvr page.
+| Face                  | A good fit for                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| **Slow Hours**        | A quiet digital clock, a short reminder, optional room temperature, and a dedicated night mode. |
+| **Soft Orbit**        | A simple analog clock with a warm, paper-like finish.                                           |
+| **Color Drift**       | A numberless analog clock over a slowly moving pastel gradient.                                 |
+| **Color Drift Night** | A darker gradient clock in indigo, plum, and teal.                                              |
+| **Stillroom**         | Warm serif clock numerals and a subtle room-temperature reading.                                |
+| **Photo Hours**       | A favorite photo or a rotating collection, with shuffle, fill/fit, and an optional clock.       |
+| **Weather Hours**     | Current weather, a short daily or hourly forecast, and gentle weather-aware animation.          |
+| **Calendar Hours**    | One upcoming or ongoing appointment, with busy-only privacy by default.                         |
 
-The screensaver feature requires **Fully PLUS**. See the
-[Fully Kiosk screensaver settings](https://www.fully-kiosk.com/docs/en/configuration/screensaver)
-for brightness, motion detection, and other options.
+| Slow Hours                                                                         | Soft Orbit                                                                                |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| ![Slow Hours digital clock on a dark green background](docs/images/slow-hours.png) | ![Soft Orbit analog clock on a warm background](docs/images/soft-orbit.png)               |
+| **Color Drift**                                                                    | **Color Drift Night**                                                                     |
+| ![Color Drift analog clock over a pastel gradient](docs/images/color-drift.png)    | ![Color Drift Night analog clock over a dark gradient](docs/images/color-drift-night.png) |
 
-You can also open a display link in any modern browser and use fullscreen mode
-on a tablet or monitor. Automatic screensaver activation is handled by your
-kiosk app, not by screensvr.
+![Stillroom with a serif digital clock and room-temperature reading](docs/images/stillroom.png)
 
-> **Keep it on a trusted network.** Anyone who can reach the server can view its
-> display links; management requires the administrator password. Complete
-> first-run setup on your trusted network, since the first person to finish setup
-> claims the server. See the [deployment guide](docs/deployment.md#reverse-proxies)
-> before exposing it outside your home.
+## Make it part of your day
 
-## Included screen faces
+### Save scenes and schedule a night clock
 
-Eight faces are ready to use. These screenshots show the original clock designs.
-Each face has its own options for colors, clock style, or animation.
+Open a display's **Scenes & schedule** to save looks with their own face,
+settings, and data sources. Use **Add night clock** for a near-black Slow Hours
+scene, then schedule it alongside your daytime look. Schedules follow the
+display's timezone.
 
-| Slow Hours                                                                                    | Soft Orbit                                                                                                                  |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| ![Slow Hours: a digital clock on a dark green background](docs/images/slow-hours.png)         | ![Soft Orbit: an analog clock on a warm, paper-colored background](docs/images/soft-orbit.png)                              |
-| A quiet digital clock with a short reminder.                                                  | A simple analog clock with a warm, paper-like finish.                                                                       |
-| **Color Drift**                                                                               | **Color Drift Night**                                                                                                       |
-| ![Color Drift: a numberless analog clock over a pastel gradient](docs/images/color-drift.png) | ![Color Drift Night: a moonlit analog clock over a dark indigo, plum, and teal gradient](docs/images/color-drift-night.png) |
-| Soft colors and a slowly moving gradient.                                                     | A darker take on Color Drift for a quieter screen.                                                                          |
+See [scenes and scheduling](docs/user-guide.md#scenes-and-scheduling) for a
+step-by-step example. Night mode dims the page, not the tablet's backlight.
 
-**Stillroom** pairs a locally bundled Instrument Serif digital clock with a
-quiet room-temperature reading on a charcoal-green background. Its gentle
-ambient movement respects reduced-motion preferences. Choose a Home Assistant
-sensor under the display's **Data sources → Room temperature** settings.
+### Connect photos, weather, and calendars
 
-![Stillroom: warm serif clock numerals and a room-temperature reading on a dark charcoal-green background](docs/images/stillroom.png)
+Open **Integrations** to add a connection, then choose what to show under a
+display or scene's **Data sources**. Trying a selection changes only the preview;
+saving an active scene updates the screen.
 
-**Weather Hours** pairs a quiet clock with current weather and a compact daily
-or hourly forecast. Subtle rain, drifting snow, and soft clouds follow fresh
-current conditions; stale or missing weather returns to a neutral background.
-Weather animation can be disabled and respects reduced-motion preferences.
-Choose a Home Assistant weather entity under **Data sources**, then select
-**Next three days** or **Next six hours** in **Forecast view**.
-See [weather setup](docs/integrations.md#weather).
+| Source              | What you can show                                               | Setup                                                               |
+| ------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Home Assistant      | Sensors, current weather, forecasts, and calendars              | [Home Assistant](docs/integrations.md#home-assistant)               |
+| Immich              | An owned or shared album; requires Immich 3.4.1 or later in 3.x | [Immich](docs/integrations.md#immich)                               |
+| Local or NAS folder | A photo slideshow or one selected image                         | [Mounted photo folders](docs/integrations.md#mounted-photo-folders) |
+| iCalendar feed      | Your next appointment from a read-only subscription             | [Calendars](docs/integrations.md#calendars)                         |
 
-**Calendar Hours** pairs a quiet clock with one appointment from explicitly
-selected **iCalendar feeds and Home Assistant calendars**. Merge up to eight
-calendars under **Data sources → Next appointment**. Busy-only is the default;
-publishing event titles requires an explicit opt-in for each calendar. Ongoing
-appointments stay until they end, with all-day events as a fallback.
-See [calendar setup and privacy](docs/integrations.md#calendars).
+Credentials stay on the server. Faces receive only the data you select, never
+your integration tokens. Selected content has the same visibility as the display
+link; see [integration privacy](docs/integrations.md#privacy-and-credentials).
 
-**Photo Hours** shows a selected photo or a slideshow from a mounted directory
-or an **Immich album**, with an optional clock. Choose its photos under the
-display's **Data sources** settings. See [Immich setup](docs/integrations.md#immich)
-or [mounted photo setup](docs/integrations.md#mounted-photo-folders) for the
-optional read-only Docker/NAS mount.
+### Install or build a face
 
-## Add more faces
+Choose **Face library → Install a face** and select a face ZIP. Only install
+packages from sources you trust: faces run JavaScript, and sandboxing does not
+make hostile packages safe.
 
-Open **Face library** to browse your collection. To add a face, choose **Install a
-face** and select a face package. No server rebuild is needed.
+To build your own, start with the [face developer guide](docs/faces.md) and the
+[framework-free Paper example](examples/paper/).
 
-![The face library showing the four bundled clock faces and the Install a face button](docs/images/face-library.png)
+## Documentation
 
-Only install packages from sources you trust. Faces run JavaScript; the sandbox
-adds protection but does not make untrusted code safe.
-
-Want to build your own? Start with the [face developer guide](docs/faces.md) and
-the [framework-free example](examples/paper/).
-
-## Connect your home
-
-Add a **Home Assistant** connection under **Integrations**, then select a sensor
-in a display's **Data sources** settings. Slow Hours and Stillroom can show a room
-temperature; Weather Hours uses weather entities for current conditions and
-daily/hourly forecasts. Other faces can declare numeric, humidity, boolean, text,
-photo, structured weather, or next-appointment calendar inputs.
-Faces receive only the selected readings through the SDK, never your credentials.
-
-Connections are read-only and shared across displays, while each display chooses
-its own sensors. See [integration setup and privacy](docs/integrations.md) and the
-[Room Climate developer example](examples/room-climate/). Selected readings are
-public to anyone who can reach the display URL, just like other display content.
-
-For photos, add **Immich** under Integrations using your instance URL and a
-read-only API key, then choose an owned/shared album in a display's photo data
-sources. Requires Immich **3.4.1 or later in 3.x**. Credentials stay on the server;
-the entire selected album has the same visibility as the display.
-
-## Development
-
-Open the repository using **Dev Containers: Reopen in Container** in VS Code for
-the development toolchain, or use Node.js 24 LTS locally:
-
-```sh
-npm ci
-npm run dev
-```
-
-Open **http://localhost:5173**. The development server forwards API and face
-requests to the backend on port 3000. Do not use it for production.
-
-To run checks:
-
-```sh
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npm run test:e2e
-```
-
-Browser tests use Chromium, Firefox, and WebKit. Actual Fully Kiosk/Android
-hardware still needs device testing. See the [development guide](docs/development.md)
-for more details.
+- [User guide](docs/user-guide.md): displays, scenes, schedules, and everyday troubleshooting.
+- [Deployment](docs/deployment.md): installation alternatives, HTTPS, upgrades, and backups.
+- [Integrations](docs/integrations.md): connect your services and choose what to publish.
+- [Building faces](docs/faces.md): manifest, settings, inputs, SDK, and packaging.
+- [Development](docs/development.md): local setup, Dev Container, and tests.
+- [Architecture](docs/architecture.md) · [Releasing](docs/releasing.md) · [Security policy](SECURITY.md)
 
 ## License
 

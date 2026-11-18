@@ -1,11 +1,12 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 5,
   "id": "paper",
   "version": "1.0.0",
   "name": "Paper",
   "description": "A little handwritten-feeling reminder and the passing hours.",
   "author": "screensvr example",
   "entry": "index.html",
+  "inputs": [],
   "settings": [
     {
       "key": "caption",

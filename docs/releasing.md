@@ -1,153 +1,188 @@
-# Repository and release security
+# Releasing screensvr
 
-This public repository uses standard GitHub-hosted runners, free security
-features, and GHCR. No personal access token, registry password, signing key,
-self-hosted runner, or second maintainer is needed.
+This guide is for maintainers. Publishing a GitHub release is the deliberate
+approval to build, check, and publish its container image. Merging a pull request
+or creating a tag alone does not publish a container.
 
-## GitHub settings
+The workflow uses GitHub-hosted runners, GHCR, short-lived GitHub credentials,
+and attestations. It needs no personal access token, registry password, signing
+key, self-hosted runner, or second maintainer.
 
-The repository settings are repeatable with an administrator-authenticated
-GitHub CLI. Review the dry run before applying:
+## Before a release
+
+- Confirm the [repository settings](#repository-settings) and immutable releases
+  are enabled.
+- Update `package.json` and `package-lock.json` to the intended version, such as
+  `1.0.0`. Keep any user-visible application version labels and documentation
+  examples consistent. The application version, face package versions, and
+  manifest format identifier are separate values.
+- Run the checks in [Development](development.md#run-checks), review security
+  findings, and complete [real-service/device checks](development.md#integration-and-device-testing).
+- Check the security policy for any time-limited advisory acceptance. Do not
+  bypass its scope or silently extend its deadline.
+- Verify first-run setup, an upgrade from the previous supported release,
+  complete-directory backup/restore, and integration-key recovery.
+- Prepare release notes covering features, requirements, known limits, and
+  upgrade/rollback instructions. Documentation targeting a new image tag can
+  land before publication, but that tag is pullable only after publishing succeeds.
+
+Merge version, documentation, and release-preparation changes through a passing
+PR before publishing.
+
+## Publish a release
+
+1. In GitHub Releases, create a draft using the matching `v`-prefixed version,
+   such as **`v1.0.0`**, on a commit from `main`.
+2. Add notes and any GitHub release assets **before publication**. Immutable
+   releases cannot accept new assets afterward.
+3. If the version has a prerelease suffix, such as `1.1.0-rc.1`, mark it as a
+   prerelease. Publish when ready; no second approval is required.
+4. Watch the **Release container** workflow. It validates release immutability,
+   version/tag equality, the exact checked-out commit, and actual ancestry on
+   `main`. The release's `target_commitish` label is not proof of ancestry.
+5. Wait for the test, security, container build/scan/smoke-test, and publishing
+   jobs to finish. A release page can exist before its image is available.
+6. Check the run summary for the image digest and verification command.
+7. Confirm an anonymous pull and provenance verification succeed, then check the
+   running release with a fresh data directory and a restored test backup.
+
+Published images support **linux/amd64**. Do not advertise multi-architecture
+images until the build, scan, and smoke-test matrix supports them.
+
+### What the workflow publishes
+
+Read-only jobs rerun CI and produce the scanned image plus a CycloneDX SBOM.
+A one-day artifact transfers them to the environment-restricted publisher,
+which verifies the archive checksum. The publisher does not check out source,
+install dependencies, or rebuild.
+
+Only that job receives registry-write, attestation, and OIDC permissions.
+It uses the short-lived `GITHUB_TOKEN` to publish:
+
+- `ghcr.io/lemanjo/screensvr:vVERSION`
+- `ghcr.io/lemanjo/screensvr:sha-COMMIT`
+- Build provenance and SBOM attestations
+
+An existing version tag cannot be replaced. `latest` updates only for GitHub's
+current latest stable release and only after attestations succeed. Prereleases
+never update it.
+
+### First package publication
+
+After the first successful push, change the GHCR package visibility to **public**.
+Packages default to private even when their source repository is public.
+Confirm that unauthenticated pulls work.
+
+Keep the package linked to this repository with Actions access restricted to
+this repository. Do not add PAT-based publishing credentials.
+
+## Verification and failure recovery
+
+Use the exact digest from the workflow summary for fixed deployments. See
+[image verification](deployment.md#verify-a-release-image) for the CLI command.
+GitHub release immutability protects Git tags and release assets, **not** mutable
+GHCR tags such as `latest`. Attestations prove provenance, not the absence of
+vulnerabilities.
+
+When validating publishing changes, confirm:
+
+- Fork PRs receive no publishing job, secrets, OIDC, or registry-write permission.
+- Non-immutable, invalid, off-main, or mismatched-version releases fail before building.
+- Failed checks/scans never reach publishing.
+- Prereleases cannot update `latest`, and reruns cannot replace published versions.
+- Public images pull anonymously and their attestations verify against this repo.
+
+If failure occurs **before publishing**, inspect the error and rerun once fixed.
+If publishing partially succeeds, do not delete or replace the version. Publish
+a new patch release and explain the failure in its notes; the existing version
+may lack complete attestations or an updated `latest`.
+
+## Repository settings
+
+Use an administrator-authenticated GitHub CLI. Review the dry run before
+changing remote settings:
 
 ```sh
 python3 .github/scripts/configure-repository.py
 python3 .github/scripts/configure-repository.py --apply
 ```
 
-This configures:
+The script configures:
 
-- `main`: pull requests, up-to-date passing `test`, `security`, and `container`
-  checks from GitHub Actions; no force pushes or deletion; zero required review
-  approvals and no administrator bypass.
-- `v*` tags: only repository administrators may create them; **nobody** may
-  update or delete them. Separate creation/immutability rulesets prevent the
-  administrator's creation bypass from permitting tag replacement.
-- Immutable releases and private vulnerability reporting.
-- Dependabot alerts/security updates, secret scanning, and push protection.
-- Read-only default workflow permissions, no automated PR approvals, an explicit
-  action allowlist, and approval for all outside-contributor workflow runs.
-- A `release` environment accepting only `v*` **tags**, not branches. It has no
-  reviewer requirement, self-review restriction, secrets, or administrator bypass.
+- `main` requires PRs and up-to-date passing `test`, `security`, and `container`
+  checks, with no force pushes, deletion, or administrator bypass. Zero review
+  approvals are required for solo maintenance.
+- Only repository administrators may create `v*` tags; nobody may update or
+  delete them. Separate creation/immutability rulesets prevent creation bypass
+  from permitting replacement.
+- Immutable releases, private vulnerability reporting, Dependabot alerts/updates,
+  secret scanning, and push protection.
+- Read-only default workflow permissions, no automated PR approvals, an action
+  allowlist, and approval for all outside-contributor workflow runs.
+- A `release` environment restricted to `v*` tags, not branches, with no reviewer
+  requirement, self-review restriction, secrets, or administrator bypass.
 
-The allowlist initially accepts existing version references so the current
-remote CI is not broken before this change merges. After the pinned workflows
-are on `main`, enforce full commit-SHA pinning:
+For a new setup, the allowlist first permits existing version references so
+remote CI is not broken before SHA-pinned workflows land. Once they are on
+`main`, finalize full commit-SHA enforcement:
 
 ```sh
 python3 .github/scripts/configure-repository.py --apply --finalize
 ```
 
-The script refuses to enable SHA enforcement while remote workflows contain
-unpinned actions. Its mutations are explicit; unrelated rulesets are preserved.
-CodeQL uses the checked-in advanced workflow, **not** GitHub's default setup.
-It starts scanning JavaScript/TypeScript and Actions when that workflow merges.
+The script refuses SHA enforcement while remote workflows contain unpinned
+actions and preserves unrelated rulesets. CodeQL uses the checked-in advanced
+workflow, not GitHub's default setup.
 
-GitHub settings are not versioned automatically. The ruleset JSON files and
-configuration script document the intended state. Account passkeys/2FA,
-recovery codes, and account access must be managed separately in GitHub settings.
-If emergency recovery is necessary, deliberately edit a ruleset in Settings;
-there is no permanent everyday bypass.
+GitHub settings are not automatically versioned. The ruleset JSON files and
+script record the intended state. Manage account passkeys/2FA, recovery codes,
+and account access separately. Emergency recovery requires deliberately editing
+a ruleset; there is no permanent everyday bypass.
 
-## Pull requests and automated maintenance
+## Automated checks and maintenance
 
-You can create, inspect, and merge your own PR once checks pass. There is no
-second-person approval requirement. `CODEOWNERS` provides ownership/notifications,
-not a blocking review. Review external PRs carefully, especially changes to
-workflows, release scripts, dependency files, and security-tool checksums.
+Maintainers can create, inspect, and merge their own PRs after checks pass.
+`CODEOWNERS` provides notifications, not a blocking review. Carefully review
+external changes to workflows, scripts, lockfiles, and security-tool checksums.
 
-CI runs application/browser tests, npm audits for both lockfiles, a redacted
-Gitleaks scan over fetched Git history, actionlint/ShellCheck, a production image
-build, a Trivy scan, and a container health/non-root smoke test. Fixable HIGH and
-CRITICAL container vulnerabilities fail CI. Unfixed findings are not a release
-gate; monitor them and update the base image when fixes become available.
-CI and CodeQL also run weekly to catch newly disclosed issues.
+CI runs application/browser tests, dependency audits for both lockfiles, a
+redacted Gitleaks scan of fetched Git history, actionlint/ShellCheck, a production
+image build, Trivy, and a health/non-root smoke test. Fixable HIGH/CRITICAL
+container vulnerabilities block CI. Unfixed findings are not a release gate;
+monitor them and update the base image when fixes appear. CI and CodeQL also
+run weekly.
 
-Dependabot opens reviewed update PRs for npm, Actions (including SHA pins), and
-Docker image versions/digests. Security-tool binaries in
-`.github/scripts/install-security-tools.sh` are pinned by version and SHA-256;
-review their upstream releases and refresh both values together. No downloaded
-installer scripts are executed.
+Dependabot proposes npm, Actions/SHA-pin, and Docker image updates. Security
+tool versions and SHA-256 checksums are pinned in
+`.github/scripts/install-security-tools.sh`; review and update both together.
+Downloaded installer scripts are not executed.
 
-The Node base image is digest-pinned. The runtime removes bundled package
-managers after installing production dependencies: npm, Yarn, and Corepack are
-not needed to start the server and can otherwise introduce unrelated vulnerable
-dependencies into the shipped image.
+The Node base image is digest-pinned. The runtime removes npm, Yarn, and
+Corepack after installing production dependencies to avoid shipping unnecessary
+package managers.
 
-To run the same scanners locally on Linux x86_64:
+To run the security checks locally on Linux x86_64:
 
 ```sh
 bash .github/scripts/install-security-tools.sh gitleaks actionlint trivy
 "${XDG_CACHE_HOME:-$HOME/.cache}/screensvr-security-tools/bin/gitleaks" git --redact --no-banner --log-opts=--all .
 "${XDG_CACHE_HOME:-$HOME/.cache}/screensvr-security-tools/bin/actionlint"
 shellcheck .github/scripts/*.sh
+node .github/scripts/audit-dependencies.ts
 ```
 
-The installer uses `$RUNNER_TEMP` on Actions; `SECURITY_TOOLS_DIR` can override
-the local installation directory. Secret scanners are not proof that history is
-secret-free. Rotate exposed credentials immediately; ignore rules only prevent
-accidental additions.
+The installer uses `$RUNNER_TEMP` on Actions; `SECURITY_TOOLS_DIR` overrides its
+local directory. Scanners cannot prove history is secret-free. Rotate exposed
+credentials; ignore rules do not revoke them.
 
-## Publish a release
+### Resource usage
 
-1. Update `package.json` and its lockfile to the desired SemVer version, for
-   example `0.1.0` or `0.2.0-rc.1`. Merge the change through a passing PR.
-2. In GitHub Releases, create a draft with the matching `v`-prefixed tag on a
-   commit from `main`. Attach any GitHub release assets **before** publication:
-   immutable releases cannot accept new assets afterward.
-3. Mark prereleases consistently with their version suffix. Publish the release
-   when ready. This is the deliberate approval step; no second approval is needed.
-4. The release workflow validates immutability, the version, the exact checked-out
-   commit/tag, and actual Git ancestry on `main`. It does not trust the release's
-   `target_commitish` label.
-5. Read-only jobs rerun all checks and build/scan/smoke-test the image. A one-day
-   artifact transfers the image and CycloneDX SBOM to the publishing job.
-6. The environment-restricted publisher verifies the archive checksum and
-   downloads only this run's artifact. It does not check out the repository,
-   install dependencies, or rebuild. Only this job receives registry write,
-   attestation, and OIDC permissions.
-7. The publisher uses its short-lived `GITHUB_TOKEN` to push
-   `ghcr.io/lemanjo/screensvr:vVERSION` and `sha-COMMIT`, then publishes provenance
-   and SBOM attestations. It refuses to replace an existing version tag.
-   `latest` changes only for GitHub's current latest stable release, and only
-   after the attestations succeed.
+The setup is intended for GitHub's standard public-repository allowances.
+Check current GitHub pricing and account limits rather than assuming unlimited
+free compute, storage, or bandwidth.
 
-The initial published platform is **linux/amd64**. Other architectures can build
-from source; do not advertise multi-architecture published images until their
-build, scan, and smoke-test matrix has been added.
-
-After the **first** successful publish, open the container package's settings
-and change its visibility to **public**. GHCR packages default to private even
-when the source repository is public. Confirm an unauthenticated pull works.
-Keep the package linked to this repository and its Actions access restricted
-to this repository; do not add PAT-based publishing credentials.
-
-Inspect the run summary for the image digest and verification command. Test:
-
-- A fork PR has no publishing job, secrets, OIDC, or registry-write permission.
-- Invalid, non-immutable, off-main, or mismatched-version releases fail before
-  building; failed checks/scans never reach publishing.
-- A prerelease cannot update `latest`, and rerunning a published version cannot
-  overwrite its image.
-- The published image can be pulled anonymously after making the package public,
-  and its attestations verify against this repository.
-
-No release or container is published merely by merging this setup. The first
-real release is also the end-to-end verification of the publisher.
-
-## Verification, failures, and cost
-
-Use image digests for fixed deployments. GitHub release immutability protects
-Git tags and release assets, **not** mutable GHCR tags such as `latest`.
-An attestation proves provenance, not the absence of vulnerabilities.
-
-If a release fails before publishing, inspect the error and rerun it once fixed.
-If publishing partially succeeds, do not delete or replace the version. Publish
-a new patch version and explain the failure in the release notes; the existing
-version may not have complete attestations or an updated `latest` tag.
-
-Standard hosted-runner compute is free for public repositories, and GHCR storage
-and bandwidth are currently free. Workflow artifacts have **one-day retention**,
-and automatic Docker build-record uploads are disabled. No image build caches
-are persisted; keep Actions cache storage at the included limit and do not enable
-larger paid runners. Monitor account artifact-storage usage and spending limits,
-especially if many releases or failed browser tests run close together.
+Workflow artifacts have **one-day retention**, automatic Docker build-record
+uploads are disabled, and image build caches are not persisted. Keep Actions
+cache storage bounded and avoid larger paid runners without an explicit decision.
+Monitor artifact storage and spending limits, especially around failed or
+frequent release runs.

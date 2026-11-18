@@ -4,6 +4,11 @@ screensvr is one Node.js 24 process serving a React management application, a
 display shell, REST APIs, SSE streams, and local face assets. SQLite and the face
 directory share one persistent data volume. No cloud service is required.
 
+This is a contributor-oriented overview of the current system, not a migration
+history. For installation and everyday use, start with [Deployment](deployment.md)
+and the [user guide](user-guide.md). Face authors should use
+[Building a face](faces.md).
+
 ## Implementation
 
 | Location                               | Responsibility                                                  |
@@ -20,7 +25,8 @@ directory share one persistent data volume. No cloud service is required.
 | `src/server/scheduler.ts`              | Timezone-aware scene resolution and transition notifications    |
 | `src/server/integration-key.ts`        | Authenticated encryption and persistent integration key         |
 | `src/server/photos.ts`                 | Scoped photo capabilities and bounded resized-image cache       |
-| `src/shared/contracts.ts`              | Versioned manifests and configuration validation                |
+| `src/shared/contracts.ts`              | Manifest and configuration validation                           |
+| `src/shared/face-data.ts`              | Provider-independent input declarations and data validation     |
 | `web/src/App.tsx`                      | Administrator setup, display management, face library           |
 | `web/src/Display.tsx`                  | Permanent display addresses, reconnects, fullscreen, wake locks |
 | `web/src/FaceFrame.tsx`                | Shared preview/display renderer and message bridge              |
@@ -35,7 +41,7 @@ and manifest-validation code.
 
 - **Faces:** one installed version per unique face ID, a validated manifest, and
   a bundled/installed flag.
-- **Devices:** internal UUID, unique permanent URL slug, friendly name, IANA
+- **Displays (devices in the code):** internal UUID, unique permanent URL slug, friendly name, IANA
   timezone, manual scene selection, schedule enablement, configuration revision,
   and last-seen timestamp.
 - **Scenes:** per-device named face configurations with validated settings and
@@ -51,9 +57,9 @@ and manifest-validation code.
   on scene/device deletion. Changing a scene's face resets only that scene's
   bindings; activating a different scene never clears them. Referenced
   integrations and faces cannot be deleted while any saved scene uses them.
-- **Calendar selections:** schema v5 adds separate per-scene/input source rows,
-  with ordering and default-off title publication flags. Existing scalar/photo/
-  weather binding rows are unchanged. Calendar integration references participate
+- **Calendar selections:** separate per-scene/input source rows, with ordering
+  and default-off title publication flags. Scalar/photo/weather selections use
+  ordinary binding rows. Calendar integration references participate
   in deletion protection and saved-source limits, including inactive scenes.
 
 Foreign keys prevent deleting assigned faces. Updates use an expected revision
@@ -83,9 +89,9 @@ The slug is lowercase, with accents simplified and word separators converted to
 hyphens. Names with no usable letters or digits use `display`. Collisions get
 deterministic suffixes (`olohuone-2`, `olohuone-3`). The slug is persisted and is
 not changed by renaming the display, reading its link, or restarting the server.
-Existing databases are migrated transactionally, retaining settings and assigning
-slugs from existing names. Old UUID URLs redirect to the permanent addresses;
-obsolete pairing fragments are discarded by the client.
+Legacy UUID URLs redirect to the permanent addresses; obsolete pairing fragments
+are discarded by the client. Database migrations retain settings and permanent
+addresses.
 
 Displays and their state/SSE endpoints are read-only and require no login,
 pairing secret, or display cookie. Anyone who can reach the server can view a
@@ -107,14 +113,14 @@ while the device was asleep. Visibility changes also trigger resynchronization.
 Heartbeats keep proxy connections active and update last-seen timestamps.
 Connections are bounded to ten per device and one hundred per server.
 
-There is no service worker or guaranteed offline cold start in v0.1.
+There is no service worker or guaranteed offline cold start. An already loaded
+face continuing to render is not an offline cache of the application.
 
 ### Scheduled scenes
 
-Schema v4 migrates every existing display's face, settings, and bindings into a
-Default scene, retaining the configuration revision and permanent URL. Scheduling
-starts disabled. Devices can save at most 32 scenes and 64 grouped schedule
-entries (each selecting one or more weekdays).
+Each display starts with a Default scene and scheduling disabled. Devices can
+save at most 32 scenes and 64 grouped schedule entries, each selecting one or
+more weekdays. Scenes keep independent settings and bindings.
 
 The server resolves weekly local-time entries into actual instants using Temporal.
 The latest occurrence selects the current scene; no end times or daily resets are
@@ -153,21 +159,22 @@ settings, non-secret display context, and explicitly selected normalized input
 values. No entity IDs, raw attributes, integration addresses, session token,
 Home Assistant secret, or internal React API crosses this boundary.
 
-Preview and display use the same renderer and protocol.
-Manifest v1/protocol v1 remain supported. Manifest v2 declares optional typed
-inputs and requires data-capable protocol v2. The SDK locally expires ready
-readings and notifies faces of stale status during network loss/sleep.
-Manifest v3/protocol v3 adds image inputs. The host projects a collection count,
-revision, and opaque scoped URL instead of copying the file list into snapshots.
-SDK helpers select/rotate images locally; the face retains control of presentation.
-Manifest v4/protocol v4 adds structured current-weather and daily/hourly forecast
-inputs, independently selected and independently fresh. Earlier manifest schemas
-remain unchanged. The host validates and projects nested weather fields rather
-than forwarding arbitrary provider objects; the dependency-free display bundle
-does not import server schemas or provider code.
-Manifest v5/protocol v5 adds a structured calendar input containing one selected
-appointment or a confirmed-empty result. Busy-only/title redaction is performed
-before public snapshots, not by browser presentation.
+Preview and display use the same renderer and protocol. The current authoring
+contract uses `schemaVersion: 5`, with editable settings and optional numeric,
+boolean, text, image, weather, forecast, and calendar inputs. The SDK negotiates
+transport compatibility; face authors use the unified [manifest and SDK
+reference](faces.md), not a version-specific message implementation.
+
+The SDK locally expires ready readings and notifies faces of stale status during
+network loss/sleep. Images use a collection count, revision, and opaque scoped
+URL rather than a copied file list. SDK helpers select/rotate images locally;
+the face retains control of presentation.
+
+Current weather and daily/hourly forecasts are independently selected and fresh.
+The host validates nested weather fields rather than forwarding provider objects.
+Calendar inputs contain one selected appointment or a confirmed-empty result;
+busy-only/title redaction happens before public snapshots, not in presentation.
+The dependency-free display bundle does not import server schemas or provider code.
 
 ## Integration boundary
 
@@ -268,11 +275,11 @@ reserved directory; these are never served, and are not automatically deleted.
 Installed versions are immutable. Reassign or delete every scene using an old
 face before removing it and installing its replacement. Bundled faces cannot be removed.
 
-## Deliberately deferred
+## Deliberate limits
 
 Shared scenes, scheduled overrides, solar/event-based scheduling, registries,
 automatic updates and settings migrations, multi-user
 roles, native kiosk control, and offline startup are not implemented. Additional
 integrations should remain server-side and expose only selected data through the
-versioned face protocol. Smart-home writes and arbitrary source transformations
+face SDK. Smart-home writes and arbitrary source transformations
 are deliberately out of scope.
