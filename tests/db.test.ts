@@ -58,7 +58,7 @@ it("migrates existing displays to persistent name-based URLs without losing sett
 
   store = new Store(filename);
   expect(store.db.prepare("PRAGMA user_version").get()).toMatchObject({
-    user_version: 4,
+    user_version: 5,
   });
   expect(store.display("olohuone")).toMatchObject({
     id: "old-one",
@@ -123,7 +123,7 @@ it("upgrades a v2 database and enforces binding cascade/restrict constraints", a
   legacy.close();
   store = new Store(filename);
   expect(store.db.prepare("PRAGMA user_version").get()).toMatchObject({
-    user_version: 4,
+    user_version: 5,
   });
   expect(store.device("room")?.name).toBe("Room");
   store.db

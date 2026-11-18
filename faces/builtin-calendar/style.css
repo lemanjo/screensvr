@@ -1,0 +1,131 @@
+:root {
+  color-scheme: dark;
+  --background: #19191d;
+  --text: #ede6dc;
+  --accent: #b9a4af;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--text);
+  background: var(--background);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8vh 10vw;
+  gap: 7vh;
+}
+.clock {
+  width: 100%;
+}
+#date,
+.eyebrow,
+#when,
+#status {
+  font-family: system-ui, sans-serif;
+  font-weight: 400;
+}
+#date {
+  font-size: clamp(14px, 2.2vw, 28px);
+  opacity: 0.65;
+  margin: 0 0 1.5vh;
+}
+#time {
+  font-size: clamp(70px, 18vw, 240px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums;
+}
+.appointment {
+  border-top: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding-top: 3vh;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: clamp(10px, 1.25vw, 17px);
+  letter-spacing: 0.19em;
+  margin: 0 0 1.6vh;
+}
+h1 {
+  font-size: clamp(24px, 4.2vw, 60px);
+  line-height: 1.18;
+  font-weight: 400;
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+#when {
+  font-size: clamp(14px, 1.8vw, 26px);
+  opacity: 0.7;
+  margin: 1.7vh 0 0;
+}
+#status {
+  color: var(--accent);
+  font-size: clamp(12px, 1.3vw, 18px);
+  margin: 1.4vh 0 0;
+  min-height: 1.3em;
+}
+@media (orientation: portrait) {
+  main {
+    padding: 8vh 9vw;
+    gap: 8vh;
+  }
+  #time {
+    font-size: 22vw;
+  }
+  #date,
+  #when {
+    font-size: 3.5vw;
+  }
+  h1 {
+    font-size: 7vw;
+  }
+  .eyebrow,
+  #status {
+    font-size: 2.5vw;
+  }
+}
+@media (max-height: 350px) {
+  main {
+    padding: 4vh 7vw;
+    gap: 3vh;
+  }
+  #time {
+    font-size: clamp(30px, 22vh, 90px);
+  }
+  #date {
+    font-size: 10px;
+    margin-bottom: 0.5vh;
+  }
+  .appointment {
+    padding-top: 2vh;
+  }
+  .eyebrow {
+    font-size: 8px;
+    margin-bottom: 1vh;
+  }
+  h1 {
+    font-size: clamp(16px, 10vh, 24px);
+    -webkit-line-clamp: 1;
+  }
+  #when,
+  #status {
+    font-size: 9px;
+    margin-top: 1vh;
+  }
+}
+#status:empty {
+  display: none;
+}

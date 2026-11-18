@@ -33,6 +33,7 @@ export class DisplayStates {
         sceneId: base.sceneId,
         activation: selection!.generation,
       },
+      base.timezone,
     );
     const content = JSON.stringify({ ...base, data });
     const previous = this.snapshots.get(id);

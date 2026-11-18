@@ -1,4 +1,5 @@
 import type { FaceManifest } from "../../src/shared/contracts.js";
+import { isCalendarValue, projectCalendar } from "../../src/shared/calendar.js";
 import type {
   Datum,
   FaceData,
@@ -70,23 +71,27 @@ export function frameData(face: FaceManifest, data?: FaceData): FaceData {
             value.expiresAt !== null &&
             (input.type === "number"
               ? typeof value.value === "number" && Number.isFinite(value.value)
-              : input.type === "weather"
-                ? isWeatherValue(value.value) &&
-                  (value.value.temperature === null ||
-                    ["°C", "°F", "K"].includes(value.unit ?? ""))
-                : input.type === "forecast"
-                  ? isForecastValue(value.value, input.period) &&
-                    (value.value.entries.every(
-                      (entry) =>
-                        entry.temperature === null && entry.low === null,
-                    ) ||
+              : input.type === "calendar"
+                ? value.unit === null &&
+                  isCalendarValue(value.value) &&
+                  (value.status !== "ready" || value.value.complete)
+                : input.type === "weather"
+                  ? isWeatherValue(value.value) &&
+                    (value.value.temperature === null ||
                       ["°C", "°F", "K"].includes(value.unit ?? ""))
-                  : input.type === "image"
-                    ? isPhoto(value.value)
-                    : input.type === "boolean"
-                      ? typeof value.value === "boolean"
-                      : typeof value.value === "string" &&
-                        value.value.length <= 200) &&
+                  : input.type === "forecast"
+                    ? isForecastValue(value.value, input.period) &&
+                      (value.value.entries.every(
+                        (entry) =>
+                          entry.temperature === null && entry.low === null,
+                      ) ||
+                        ["°C", "°F", "K"].includes(value.unit ?? ""))
+                    : input.type === "image"
+                      ? isPhoto(value.value)
+                      : input.type === "boolean"
+                        ? typeof value.value === "boolean"
+                        : typeof value.value === "string" &&
+                          value.value.length <= 200) &&
             (value.quantity !== "temperature" ||
               ["°C", "°F", "K"].includes(value.unit ?? "")) &&
             (value.quantity !== "humidity" || value.unit === "%")
@@ -107,12 +112,14 @@ export function frameData(face: FaceManifest, data?: FaceData): FaceData {
                   revision: value.value.revision,
                   url: value.value.url,
                 }
-              : input.type === "weather" && isWeatherValue(value.value)
-                ? projectWeather(value.value)
-                : input.type === "forecast" &&
-                    isForecastValue(value.value, input.period)
-                  ? projectForecast(value.value)
-                  : value.value,
+              : input.type === "calendar" && isCalendarValue(value.value)
+                ? projectCalendar(value.value)
+                : input.type === "weather" && isWeatherValue(value.value)
+                  ? projectWeather(value.value)
+                  : input.type === "forecast" &&
+                      isForecastValue(value.value, input.period)
+                    ? projectForecast(value.value)
+                    : value.value,
           unit: value.unit,
           updatedAt: value.updatedAt,
           observedAt: value.observedAt,

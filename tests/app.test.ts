@@ -42,7 +42,7 @@ describe("administrator security", () => {
     expect(store.getMeta("password")).not.toContain("a-long-test-password");
     expect(
       (await app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(7);
+    ).toHaveLength(8);
     expect(
       (
         await app.inject({
@@ -434,7 +434,7 @@ describe("ZIP faces", () => {
     expect(await readdir(`${dataDir}/faces`)).toEqual([]);
     expect(
       (await server.app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(7);
+    ).toHaveLength(8);
   });
   it("limits incoming ZIP size", async () => {
     const headers = await administrator(server.app);
@@ -465,6 +465,6 @@ describe("ZIP faces", () => {
     ).toBe(404);
     expect(
       (await server.app.inject({ url: "/api/faces", headers })).json(),
-    ).toHaveLength(8);
+    ).toHaveLength(9);
   });
 });

@@ -13,7 +13,7 @@ import { auth, hash, passwordHash, passwordMatches } from "./auth.js";
 import { Store } from "./db.js";
 import { Events } from "./events.js";
 import { faceAssetRoot, Faces, UserError, ZIP_LIMIT } from "./faces.js";
-import { bindingsSchema } from "../shared/face-data.js";
+import { bindingsSchema, bindingSources } from "../shared/face-data.js";
 import { Integrations } from "./integrations/manager.js";
 import { integrationRoutes } from "./integrations/routes.js";
 import type { ConnectorFactory } from "./integrations/connector.js";
@@ -98,9 +98,9 @@ export async function createApp(options: AppOptions) {
     (integrationId) => {
       for (const device of store.usage(integrationId)) {
         if (
-          !Object.values(store.bindings(device.id)).some(
-            (binding) => binding.integrationId === integrationId,
-          )
+          !Object.values(store.bindings(device.id))
+            .flatMap(bindingSources)
+            .some((binding) => binding.integrationId === integrationId)
         )
           continue;
         if (pending.has(device.id)) continue;
@@ -135,6 +135,7 @@ export async function createApp(options: AppOptions) {
             "req.headers.authorization",
             "req.body.token",
             "req.body.credentials",
+            "req.body.feedUrl",
           ],
         }
       : false,

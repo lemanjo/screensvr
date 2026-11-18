@@ -17,6 +17,113 @@ Integrations connect services to screensvr **on the server**. A face declares
 the kinds of data it can display; you choose a source separately for each display.
 The face controls where the reading or photo appears and how it looks.
 
+## Calendars
+
+**Calendar Hours** shows one appointment, not an agenda. Its **Next appointment**
+input can merge up to eight explicitly selected calendars, including a mixture
+of iCalendar feeds and Home Assistant calendars. Selections and title-sharing
+choices are saved separately in each scene.
+
+### iCalendar subscription feeds
+
+1. Obtain a direct read-only `.ics` subscription URL from your calendar service.
+   A calendar web page or share-page URL is not a subscription feed.
+2. Open **Integrations → Add integration → iCalendar feed**.
+3. Give the feed a name, paste its **Subscription URL**, and choose its
+   **Calendar timezone**, such as `Europe/Helsinki`. This timezone resolves
+   floating event times; explicit event timezones take precedence.
+4. Choose **Test connection**, then **Save integration**.
+5. Choose **Calendar Hours** for a display or scene. Under **Data sources → Next
+   appointment → Add calendar**, choose the integration and its calendar.
+6. Add any other calendars, check the preview, then **Save changes**.
+
+Each iCalendar integration represents one feed. Its **entire subscription URL
+is a credential**, including its path and query parameters. It is encrypted
+with the integration key and is not returned after saving. Leave the URL blank
+when editing to retain it. Do not paste real URLs into screenshots, issues, or
+logs; revoke/rotate an exposed subscription URL at the calendar provider.
+
+Direct HTTP(S) URLs are supported; `webcal://` is normalized to HTTPS. Prefer
+HTTPS: HTTP exposes both the secret URL and calendar content. TLS certificates
+and connection-time DNS answers are checked using the normal integration network
+policy. Redirects, embedded URL passwords, compressed responses, and external
+attachments/timezone downloads are not followed or loaded. Obtain the final
+direct feed URL if the provider redirects. CalDAV, OAuth, custom authentication
+headers, and uploaded calendar files are not supported.
+
+### Home Assistant calendars
+
+Use an existing Home Assistant integration; no second token or connection is
+needed. Under **Add calendar**, choose that integration and a `calendar.*`
+entity. Calendar discovery uses `GET /api/calendars`, and selected events use
+`GET /api/calendars/<entity_id>?start=…&end=…`. These are read-only endpoints
+available in Home Assistant 2024.1 and newer. There are no calendar service calls
+or writes, and the connector does not rely on the entity's single-event state
+attributes. Home Assistant expands its own recurring events.
+
+Only selected calendars receive event requests. Failure of a calendar endpoint
+does not stop working sensors or weather. The upstream calendar integration must
+support event-range reads.
+
+### Selection, privacy, and presentation
+
+- **Busy-only is the default.** The face receives appointment timing but no title.
+  **Publish event titles** is an explicit opt-in for each selected calendar.
+- Descriptions, locations, attendees, meeting links, upstream identifiers,
+  calendar names, and subscription URLs never enter display data. iCalendar
+  `PRIVATE`/`CONFIDENTIAL` classifications keep titles redacted even when title
+  sharing is enabled. **Home Assistant's event API does not expose those flags:**
+  keep sensitive calendars busy-only.
+- Redaction happens on the server, before public state/SSE responses and the face
+  message bridge. A face setting that hides content is not an access control.
+  Anyone who can reach the display URL can read its published appointment, even
+  when the face is not showing it. Revocation cannot erase previously received
+  data from viewers or disconnected displays.
+- The earliest relevant display-local day wins. Within that day, ongoing timed
+  appointments take priority, followed by future timed appointments and then
+  all-day events. An ongoing appointment stays until its exclusive end. Ties use
+  stable internal calendar/event ordering; there is no rotation through overlaps.
+- All-day events preserve their calendar dates and exclusive end dates. Multi-day
+  events remain eligible on each included day. Timed appointments are formatted
+  in the display's timezone, independently of the server timezone.
+- iCalendar recurrence supports RRULE, RDATE, EXDATE, moved instances, and
+  cancellations, with DST-aware expansion. Transparent iCalendar events are
+  excluded. Unresolvable timezones, recurrence range overrides
+  (`RANGE=THISANDFUTURE`), and RDATE periods are unavailable rather than guessed.
+- The lookahead is 30 days. Confirmed empty selections show **No appointments in
+  the next 30 days**; unavailable/incomplete reads never claim the calendar is
+  empty. With partial failures, retained results are explicitly marked stale.
+- The server updates at timed event boundaries and local minute/midnight rollover.
+  The face also hides an ended event locally after sleep or disconnection. It
+  cannot advance to an unpublished appointment until it reconnects.
+
+### Refresh, limits, and recovery
+
+Selected occurrence windows refresh approximately every five minutes.
+iCalendar uses ETag/Last-Modified conditional requests when supplied, but
+re-expands cached feed text for the moving window even after a valid 304 response.
+Successful event reads/304 confirmations have a 15-minute maximum age; connection
+heartbeats cannot renew it. The ordinary 90-second display connectivity lease
+still applies. Times indicate screensvr confirmation, not the upstream calendar
+provider's synchronization age.
+
+Live selections and overlapping administrator previews share bounded reads.
+Inactive scenes do not poll. Releasing the last consumer cancels work and drops
+the source's events and feed text. Disabling/editing a connection or unbinding a
+source prevents replaced in-flight reads from restoring old data. HTTP 401 clears
+retained data and stops retries until credentials are replaced or the saved
+connection is explicitly tested. Other failures retry automatically; revoked or
+missing sources clear their cached events.
+
+Calendar window reads have four-way concurrency, ten-second HTTP timeouts, and a
+5 MiB response limit. iCalendar parsing runs in terminable five-second workers
+with 64 MiB old-generation heap limits. Feeds are limited to 20,000 components
+and 10,000 expanded occurrences/recurrence periods; the shared occurrence cache
+holds at most 50,000 events. Over-limit sources become unavailable/stale instead
+of silently truncating the event window. Published titles are limited to 200
+characters. Events and feed text remain in memory, never a persisted agenda or
+offline calendar.
+
 ## Immich
 
 Use photos from an album owned by or shared with an
@@ -168,6 +275,8 @@ available in Home Assistant **2024.1 and newer**. It supports:
 - Short text `sensor` states, up to 200 characters.
 - `weather` entities: current temperature and condition, plus independently
   selected daily and hourly forecasts when the entity supports them.
+- `calendar` entities through read-only REST event-range queries; see
+  [Calendars](#calendars).
 
 Forecasts use the read-only `weather/subscribe_forecast` WebSocket command, not
 the `weather.get_forecasts` service/action or deprecated forecast attributes.
@@ -318,3 +427,5 @@ Face authors should use provider-independent inputs and the
 Browser/API tests use local fake Home Assistant and Immich servers. Real
 Home Assistant, Immich 3.4.1, and Fully Kiosk/Android device checks are still
 required before a production rollout.
+Calendar tests additionally use a local iCalendar server; verify representative
+real subscription feeds and Home Assistant calendar providers before rollout.

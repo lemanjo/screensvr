@@ -422,8 +422,10 @@ it("retains inactive bindings, subscribes only to active sources, and blocks int
   expect(server.states.state(id)?.data.roomTemperature.value).toBe(19);
   await request(`/scenes/${day}/activate`, "POST");
   expect(server.states.state(id)?.data.roomTemperature.value).toBe(21);
-  expect(server.store.scene(id, night)?.bindings.roomTemperature.sourceId).toBe(
-    "sensor.night",
+  expect(server.store.scene(id, night)?.bindings.roomTemperature).toMatchObject(
+    {
+      sourceId: "sensor.night",
+    },
   );
   await enable(day, night);
   const state = server.store.state.bind(server.store);
