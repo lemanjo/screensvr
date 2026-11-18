@@ -6,6 +6,10 @@ import type {
   PhotoValue,
 } from "../../src/shared/face-data.js";
 import {
+  isPhotoCredit,
+  projectPhotoCredit,
+} from "../../src/shared/photo-credit.js";
+import {
   isForecastValue,
   isWeatherValue,
   projectForecast,
@@ -22,7 +26,12 @@ function isPhoto(value: unknown): value is PhotoValue & { url: string } {
     typeof photo.revision === "string" &&
     /^[a-f0-9]{64}$/.test(photo.revision) &&
     typeof photo.url === "string" &&
-    /^\/api\/photos\/[A-Za-z0-9_-]{32}$/.test(photo.url)
+    /^\/api\/photos\/[A-Za-z0-9_-]{32}$/.test(photo.url) &&
+    (photo.credits === undefined ||
+      (Array.isArray(photo.credits) &&
+        photo.credits.length === photo.count &&
+        photo.credits.length <= 48 &&
+        photo.credits.every(isPhotoCredit)))
   );
 }
 // This is deliberately lightweight: display bundles must not import Zod or
@@ -111,6 +120,9 @@ export function frameData(face: FaceManifest, data?: FaceData): FaceData {
                   count: value.value.count,
                   revision: value.value.revision,
                   url: value.value.url,
+                  ...(value.value.credits
+                    ? { credits: value.value.credits.map(projectPhotoCredit) }
+                    : {}),
                 }
               : input.type === "calendar" && isCalendarValue(value.value)
                 ? projectCalendar(value.value)

@@ -36,7 +36,11 @@ export type PhotoHandle = {
   close(): Promise<void>;
 };
 export interface PhotoConnector extends Connector {
-  read(sourceId: string, index: number): Promise<PhotoHandle>;
+  read(
+    sourceId: string,
+    index: number,
+    revision?: string,
+  ): Promise<PhotoHandle>;
 }
 export function isPhotoConnector(client?: Connector): client is PhotoConnector {
   return Boolean(

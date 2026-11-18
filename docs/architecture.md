@@ -256,6 +256,27 @@ validation, verified TLS, no redirects, bounded concurrency/body sizes, and
 timeouts. Only encrypted API keys and configured connections are persisted;
 upstream metadata/indexes and previews remain bounded in memory.
 
+Online backgrounds use the same scoped image pipeline, with a fixed catalog of
+Wikimedia featured-picture categories and NASA topic selections. A one-time
+database provisioning marker adds the enabled connection to new/existing
+installations without duplicating existing connections or resetting explicit
+disable/removal choices. It does not consume a custom-integration slot.
+Construction
+and discovery are local; only selected collections and explicit tests perform
+network reads. Up to 48 eligible photos per album refresh at six-hour intervals,
+with source-local failure/backoff and a 24-hour maximum metadata age. Downloads
+are restricted to fixed public HTTPS origins with socket-time DNS validation.
+NASA asset manifests are resolved lazily, upgrading their HTTP links to HTTPS.
+Collection metadata is shared per connector and expires after ten minutes unused.
+No upstream metadata or image files are persisted.
+
+These public collections include normalized, bounded, per-index provenance in
+their image datum. Online bindings require an image input declaring
+`attribution: true`; Photo Hours renders the credit after the matching image
+loads. This optional image capability does not change protocol negotiation.
+Photo grants include the collection revision, and the online connector rejects
+reads against replaced metadata to prevent image/credit mismatches.
+
 **Only trusted packages are supported.** Browser sandboxing cannot prevent every
 resource-exhaustion attack, browser vulnerability, or misleading visual design.
 

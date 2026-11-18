@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isCalendarValue } from "./calendar.js";
+import { isPhotoCredit, type PhotoCredit } from "./photo-credit.js";
 import {
   isForecastValue,
   weatherConditions,
@@ -30,7 +31,13 @@ export const scalarInputSchema = z.discriminatedUnion("type", [
 ]);
 export const inputSchema = z.union([
   scalarInputSchema,
-  z.object({ ...base, type: z.literal("image") }).strict(),
+  z
+    .object({
+      ...base,
+      type: z.literal("image"),
+      attribution: z.literal(true).optional(),
+    })
+    .strict(),
 ]);
 export const weatherInputSchema = z.union([
   inputSchema,
@@ -120,8 +127,14 @@ export const photoValueSchema = z
       .string()
       .regex(/^\/api\/photos\/[A-Za-z0-9_-]{32}$/)
       .nullable(),
+    credits: z
+      .array(z.custom<PhotoCredit>(isPhotoCredit))
+      .min(1)
+      .max(48)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => !value.credits || value.credits.length === value.count);
 export type PhotoValue = z.infer<typeof photoValueSchema>;
 export const weatherValueSchema = z
   .object({
@@ -318,4 +331,5 @@ export type Integration = IntegrationBase &
     | { type: "immich"; baseUrl: string }
     | { type: "mounted-folder"; folder: string }
     | { type: "ical"; timezone: string }
+    | { type: "online-backgrounds" }
   );

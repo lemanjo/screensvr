@@ -248,7 +248,8 @@ acknowledgments. A thrown update callback is reported to the host as a face erro
 Declare an input such as
 `{ "key": "photos", "label": "Photos", "type": "image" }` in `inputs`.
 The administrator can select an Immich album, a mounted folder, or one mounted
-image. A single image is a collection with one item.
+image. Attribution-capable inputs can also select curated online albums.
+A single image is a collection with one item.
 
 A ready/stale image datum contains `{ count, revision, url }`, not image bytes
 or the library's file list. Its freshness lease confirms source availability,
@@ -303,6 +304,47 @@ handle image errors without hiding the clock. The bundled
 [Photo Hours](../faces/builtin-photos/) demonstrates this more robust playback
 pattern. No filesystem paths, provider credentials, or unselected library data
 are exposed.
+
+### Online image attribution
+
+To accept **Online backgrounds**, an image input must explicitly promise to
+render the supplied attribution:
+
+```json
+{ "key": "photos", "label": "Photos", "type": "image", "attribution": true }
+```
+
+This is an optional, backwards-compatible image-input capability, not a new
+protocol version. Inputs without it remain compatible with local/Immich photos,
+but cannot bind online albums.
+
+For online albums, `photos.get` and `photos.watch` return an additional `credit`:
+
+```js
+{
+  title: "Landscape",
+  attribution: "A. Photographer",
+  source: "Wikimedia Commons",
+  sourceUrl: "https://commons.wikimedia.org/wiki/File:Landscape.jpg",
+  license: "CC BY-SA 4.0",
+  licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/"
+}
+```
+
+Display the title, attribution, source, and license with their source/license
+links. Use `textContent`, never `innerHTML`. Do not truncate or offer an option
+to hide required credits. Update credits **only after the corresponding image
+loads**; retain the old image's credits during a failed or pending replacement.
+Clear credits when clearing the image. Photo Hours demonstrates this behavior.
+Links stay subject to the ordinary face sandbox; no extra network or popup
+permissions are granted.
+
+The collection descriptor contains a bounded `credits` array in index order
+(at most 48 entries) for these public sources. It contains provenance, not raw
+image URLs. Do not persist it or use it as an upstream image catalog. Preserve
+the SDK URL's `v` revision parameter: scoped online image reads reject mismatched
+metadata revisions so an index cannot silently display a different image under
+the wrong credit.
 
 ## Weather and forecasts
 

@@ -14,6 +14,17 @@ import {
 import { api, errorMessage } from "./api.js";
 import { Select } from "./Select.js";
 
+function supportsInput(input: FaceInput, integration: Integration) {
+  return input.type === "calendar"
+    ? integration.type === "home-assistant" || integration.type === "ical"
+    : input.type === "image"
+      ? integration.type === "mounted-folder" ||
+        integration.type === "immich" ||
+        (integration.type === "online-backgrounds" &&
+          input.attribution === true)
+      : integration.type === "home-assistant";
+}
+
 function BindingField({
   input,
   binding,
@@ -95,15 +106,7 @@ function BindingField({
         options={[
           { value: "", label: "Not connected" },
           ...integrations
-            .filter((integration) =>
-              input.type === "calendar"
-                ? integration.type === "home-assistant" ||
-                  integration.type === "ical"
-                : input.type === "image"
-                  ? integration.type === "mounted-folder" ||
-                    integration.type === "immich"
-                  : integration.type === "home-assistant",
-            )
+            .filter((integration) => supportsInput(input, integration))
             .map((integration) => ({
               value: integration.id,
               label: `${integration.name}${integration.enabled ? "" : " — disabled"}`,
@@ -116,6 +119,15 @@ function BindingField({
           onChange();
         }}
       />
+      {input.type === "image" &&
+        integrations.find((item) => item.id === integrationId)?.type ===
+          "online-backgrounds" && (
+          <small>
+            Curated online albums refresh periodically. Image credits are always
+            displayed. Collections are supplied by third parties and are not
+            guaranteed family-safe.
+          </small>
+        )}
       {integrationId && (
         <Select
           label={`${input.label} ${input.type === "calendar" ? "calendar" : input.type === "image" ? "photo source" : input.type === "weather" || input.type === "forecast" ? "weather source" : "sensor"}`}
@@ -143,9 +155,12 @@ function BindingField({
             ? "No calendars found. Check calendar access and availability in the integration."
             : input.type === "image"
               ? integrations.find((item) => item.id === integrationId)?.type ===
-                "immich"
-                ? "No albums found. Check album access in Immich or search by album name."
-                : "No photos found. Check the folder mount or search by folder/file name."
+                "online-backgrounds"
+                ? "No curated albums found. Check that the integration is enabled."
+                : integrations.find((item) => item.id === integrationId)
+                      ?.type === "immich"
+                  ? "No albums found. Check album access in Immich or search by album name."
+                  : "No photos found. Check the folder mount or search by folder/file name."
               : input.type === "weather" || input.type === "forecast"
                 ? `No compatible weather sources found.${input.type === "forecast" ? ` The entity must support ${input.period} forecasts.` : ""} Search by friendly name or entity ID.`
                 : "No compatible sensors found. Search by friendly name or entity ID."}
@@ -276,7 +291,9 @@ export function BindingFields({
         {face.inputs.some((input) => input.type === "image") &&
           " Photo sources share the whole selected folder or album, not just the currently visible image."}
       </p>
-      {!integrations.length && (
+      {!integrations.some((integration) =>
+        face.inputs.some((input) => supportsInput(input, integration)),
+      ) && (
         <p>
           Add a connection on the Integrations page, then return here to choose
           a source.
