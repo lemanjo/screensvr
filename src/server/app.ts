@@ -204,7 +204,7 @@ export async function createApp(options: AppOptions) {
   });
   app.addHook("onClose", async () => store.db.close());
 
-  app.get("/api/health", async () => ({ status: "ok", version: "1.0.0" }));
+  app.get("/api/health", async () => ({ status: "ok", version: "1.1.0" }));
   app.get("/api/auth/status", async (request) => ({
     configured: Boolean(store.getMeta("password")),
     authenticated: Boolean(security.session(request)),
