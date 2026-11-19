@@ -12,7 +12,7 @@ links, and face assets share port **3000**. Use one process per data directory.
 
 Follow the [README quick start](../README.md#quick-start) for a complete Compose
 file and first-display setup. The example targets
-`ghcr.io/lemanjo/screensvr:v1.0.0`; it can be pulled after that release's publishing
+`ghcr.io/lemanjo/screensvr:v1.1.0`; it can be pulled after that release's publishing
 workflow succeeds. Check [releases](https://github.com/lemanjo/screensvr/releases)
 for available versions.
 

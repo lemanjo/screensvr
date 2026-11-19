@@ -42,7 +42,7 @@ Create a directory and save this as `compose.yaml`:
 ```yaml
 services:
   screensvr:
-    image: ghcr.io/lemanjo/screensvr:v1.0.0
+    image: ghcr.io/lemanjo/screensvr:v1.1.0
     ports:
       - "3000:3000"
     volumes:
@@ -64,7 +64,7 @@ Then run from that directory:
 docker compose up -d
 ```
 
-This example targets **1.0.0**; its image is available after the release workflow
+This example targets **1.1.0**; its image is available after the release workflow
 successfully publishes it. Check [releases](https://github.com/lemanjo/screensvr/releases)
 for published versions.
 
