@@ -21,9 +21,7 @@ test("connect Immich, preview an album privately, and display photos without ups
     await page
       .getByLabel("Administrator password")
       .fill("a-long-browser-test-password");
-    await page
-      .getByRole("button", { name: /Create your space|Sign in/ })
-      .click();
+    await page.getByRole("button", { name: /Create password|Sign in/ }).click();
     await page.getByRole("button", { name: /^Integrations/ }).click();
     await page
       .getByRole("button", { name: "Add integration", exact: true })
@@ -51,7 +49,7 @@ test("connect Immich, preview an album privately, and display photos without ups
       .getByRole("button", { name: "Add display", exact: true })
       .click();
     await page.getByLabel("Display name", { exact: true }).fill(name);
-    await page.getByRole("combobox", { name: "Start with a face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page
       .getByRole("option", { name: "Photo Hours", exact: true })
       .click();

@@ -25,6 +25,7 @@ function SceneEditor({
   device,
   faces,
   integrations,
+  active,
   busy,
   onSave,
 }: {
@@ -32,6 +33,7 @@ function SceneEditor({
   device: Device;
   faces: Face[];
   integrations: Integration[];
+  active: boolean;
   busy: boolean;
   onSave: (scene: Scene) => void;
 }) {
@@ -56,7 +58,12 @@ function SceneEditor({
             data={preview?.data}
           />
         </div>
-        <p>Preview only. Saving an inactive scene does not activate it.</p>
+        <span className="preview-label">Preview</span>
+        <p>
+          {active
+            ? "Changes apply when saved."
+            : "Saving won’t activate this scene."}
+        </p>
         {preview?.error && (
           <p className="error" role="alert">
             {preview.error}
@@ -82,7 +89,7 @@ function SceneEditor({
           />
         </label>
         <Select
-          label="Scene face"
+          label="Face"
           value={draft.faceId}
           options={faces.map((face) => ({
             value: face.manifest.id,
@@ -101,9 +108,8 @@ function SceneEditor({
           }}
         />
         {draft.faceId !== scene.faceId && (
-          <p>
-            Changing this scene’s face resets only this scene’s settings and
-            data sources. Other scenes are kept.
+          <p className="integration-warning">
+            Saving clears this scene’s previous settings and data sources.
           </p>
         )}
         {face.manifest.settings.map((setting) => (
@@ -171,9 +177,8 @@ function ScheduleEditor({
         />
       </label>
       <p>
-        Scenes stay active until the next entry, including overnight and on days
-        without entries. Disable scheduling before manually activating a scene;
-        disabling keeps the current scene.
+        Scenes stay active until the next entry. Disabling scheduling keeps the
+        current scene.
       </p>
       {draft.entries.map((entry, index) => (
         <fieldset className="schedule-entry" key={index}>
@@ -255,11 +260,18 @@ function ScheduleEditor({
           {parsed.error.issues.map((issue) => issue.message).join(" ")}
         </p>
       )}
-      <p>
-        During a spring-forward gap, skipped entries apply at the clock jump
-        (latest wins). During a repeated hour, entries apply at the first
-        occurrence only.
-      </p>
+      <details className="help">
+        <summary>Schedule details</summary>
+        <p>
+          Scenes carry over overnight and on days without entries. Disable
+          scheduling to activate a scene manually.
+        </p>
+        <p>
+          When clocks move forward, skipped entries apply at the clock jump; the
+          latest wins. When an hour repeats, entries apply only at the first
+          occurrence.
+        </p>
+      </details>
       <button className="primary" disabled={busy || !parsed.success}>
         {busy ? "Saving…" : "Save schedule"}
       </button>
@@ -525,6 +537,7 @@ export function Scenes({
                   device={device}
                   faces={faces}
                   integrations={integrations}
+                  active={selected === config.activeSceneId}
                   busy={busy}
                   onSave={(scene) =>
                     void mutate(`/scenes/${scene.id}`, "PATCH", {

@@ -27,7 +27,7 @@ To try Paper, run this from the repository root; no build step is needed:
 zip -j paper.zip examples/paper/{manifest.json,index.html,face.js,style.css}
 ```
 
-Choose **Face library → Install a face**, upload `paper.zip`, and select Paper
+Choose **Face library → Install face**, upload `paper.zip`, and select Paper
 in a display or scene. Adjust its settings, preview, and save.
 
 When packaging your own face, ZIP the **contents**, not an enclosing directory.

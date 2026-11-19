@@ -29,10 +29,10 @@ test("display dropdowns are searchable, themed, keyboard accessible, and saved",
   await page
     .getByLabel("Administrator password")
     .fill("a-long-browser-test-password");
-  await page.getByRole("button", { name: /Create your space|Sign in/ }).click();
+  await page.getByRole("button", { name: /Create password|Sign in/ }).click();
   await page.getByRole("button", { name: "Add display", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill(displayName);
-  await page.getByRole("combobox", { name: "Start with a face" }).click();
+  await page.getByRole("combobox", { name: "Face", exact: true }).click();
   await page.getByRole("option", { name: "Slow Hours", exact: true }).click();
   await page
     .getByRole("button", { name: "Create display", exact: true })
@@ -91,7 +91,7 @@ test("display dropdowns are searchable, themed, keyboard accessible, and saved",
   await format.press("Enter");
   await expect(format).toHaveText("12 hour");
 
-  const face = page.getByRole("combobox", { name: "Screen face", exact: true });
+  const face = page.getByRole("combobox", { name: "Face", exact: true });
   await face.focus();
   await face.press("s");
   await face.press("o");
@@ -99,7 +99,7 @@ test("display dropdowns are searchable, themed, keyboard accessible, and saved",
   await face.press("t");
   await face.press("Enter");
   await expect(face).toHaveText("Soft Orbit");
-  await expect(page.getByLabel("A small reminder")).toHaveValue(
+  await expect(page.getByLabel("Caption", { exact: true })).toHaveValue(
     "Make time for less.",
   );
   await face.click();

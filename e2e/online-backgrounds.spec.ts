@@ -62,15 +62,13 @@ test("pick automatically enabled online albums without integration setup and pre
     await page
       .getByLabel("Administrator password")
       .fill("a-long-browser-test-password");
-    await page
-      .getByRole("button", { name: /Create your space|Sign in/ })
-      .click();
+    await page.getByRole("button", { name: /Create password|Sign in/ }).click();
     // Go straight to display setup: no Integrations page or enable step.
     await page
       .getByRole("button", { name: "Add display", exact: true })
       .click();
     await page.getByLabel("Display name", { exact: true }).fill(name);
-    await page.getByRole("combobox", { name: "Start with a face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page
       .getByRole("option", { name: "Photo Hours", exact: true })
       .click();
@@ -128,7 +126,7 @@ test("pick automatically enabled online albums without integration setup and pre
       .getByRole("button", { name: `Configure ${connectionName}` })
       .click();
     await expect(
-      page.getByText(/Included and enabled by default/),
+      page.getByText(/Enabled by default; requires internet access/),
     ).toBeVisible();
     await expect(page.getByLabel("Enabled", { exact: true })).toBeChecked();
     await expect(page.getByLabel("API key", { exact: true })).toHaveCount(0);

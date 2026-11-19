@@ -24,7 +24,7 @@ export function Dialog({
       if (event.key !== "Tab") return;
       const elements = [
         ...(ref.current?.querySelectorAll<HTMLElement>(
-          "button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], textarea:not(:disabled)",
+          "button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], textarea:not(:disabled), summary",
         ) ?? []),
       ];
       const first = elements[0],

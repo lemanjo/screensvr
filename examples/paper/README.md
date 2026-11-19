@@ -10,7 +10,7 @@ From the repository root, package only the runtime files:
 zip -j paper.zip examples/paper/{manifest.json,index.html,face.js,style.css}
 ```
 
-In screensvr, choose **Face library → Install a face**, upload `paper.zip`, then
+In screensvr, choose **Face library → Install face**, upload `paper.zip`, then
 select **Paper** in a display or scene. Adjust its settings and save.
 
 See the [face developer guide](../../docs/faces.md) for the manifest and SDK

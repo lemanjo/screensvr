@@ -117,7 +117,7 @@ export function Display({ slug }: { slug: string }) {
     return (
       <main className="display-message">
         <span className="wordmark">screensvr</span>
-        <p>Connecting your screen…</p>
+        <p>Connecting…</p>
       </main>
     );
   return (
@@ -131,7 +131,7 @@ export function Display({ slug }: { slug: string }) {
       />
       {!connected && (
         <span className="reconnecting" role="status">
-          Reconnecting · your face is still running
+          Reconnecting…
         </span>
       )}
       {document.fullscreenEnabled && (

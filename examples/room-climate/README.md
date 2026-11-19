@@ -10,7 +10,7 @@ From the repository root, package only the runtime files:
 zip -j room-climate.zip examples/room-climate/{manifest.json,index.html,face.js,style.css}
 ```
 
-Choose **Face library → Install a face**, upload `room-climate.zip`, and select
+Choose **Face library → Install face**, upload `room-climate.zip`, and select
 **Room Climate** in a display or scene. Add a Home Assistant connection under
 **Integrations**, then choose compatible sensors under **Data sources**. Preview
 your selections and save.

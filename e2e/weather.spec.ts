@@ -317,9 +317,7 @@ test("configure, preview, save and update live Home Assistant weather without up
     await page
       .getByLabel("Administrator password")
       .fill("a-long-browser-test-password");
-    await page
-      .getByRole("button", { name: /Create your space|Sign in/ })
-      .click();
+    await page.getByRole("button", { name: /Create password|Sign in/ }).click();
     await expect(
       page.getByRole("button", { name: "Add display", exact: true }),
     ).toBeVisible();
@@ -354,7 +352,7 @@ test("configure, preview, save and update live Home Assistant weather without up
       .getByRole("button", { name: "Add display", exact: true })
       .click();
     await page.getByLabel("Display name", { exact: true }).fill(name);
-    await page.getByRole("combobox", { name: "Start with a face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page
       .getByRole("option", { name: "Weather Hours", exact: true })
       .click();

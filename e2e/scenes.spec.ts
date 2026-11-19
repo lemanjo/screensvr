@@ -11,9 +11,9 @@ test("schedule photos, an evening clock, and a near-black night clock", async ({
   await page
     .getByLabel("Administrator password")
     .fill("a-long-browser-test-password");
-  await page.getByRole("button", { name: /Create your space|Sign in/ }).click();
+  await page.getByRole("button", { name: /Create password|Sign in/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Make room for a little calm." }),
+    page.getByRole("heading", { name: "Displays", exact: true }),
   ).toBeVisible();
   const csrf = (await (await page.request.get("/api/auth/status")).json()).csrf;
   const headers = { "x-csrf-token": csrf };
@@ -101,7 +101,7 @@ test("schedule photos, an evening clock, and a near-black night clock", async ({
       "New scene",
     );
     await page.getByLabel("Scene name", { exact: true }).fill("Evening clock");
-    await page.getByLabel("A small reminder").fill("Evening routine");
+    await page.getByLabel("Caption", { exact: true }).fill("Evening routine");
     await page.getByRole("button", { name: "Save scene", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Save scene", exact: true }),
@@ -109,7 +109,7 @@ test("schedule photos, an evening clock, and a near-black night clock", async ({
     await page
       .getByRole("button", { name: "Add night clock", exact: true })
       .click();
-    await expect(page.getByLabel("Near-black night clock")).toBeChecked();
+    await expect(page.getByLabel("Night mode", { exact: true })).toBeChecked();
     // Creating and editing inactive scenes never replaces the live photos.
     await expect(photos.locator("img").first()).toBeVisible();
     await page

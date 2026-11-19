@@ -96,10 +96,7 @@ function BindingField({
   return (
     <div className="binding-field">
       <h3>{input.label}</h3>
-      <small>
-        {input.description ??
-          `Optional ${input.type === "number" ? (input.quantity ?? "numeric") : input.type} input`}
-      </small>
+      {input.description && <small>{input.description}</small>}
       <Select
         label={`${input.label} integration`}
         value={integrationId}
@@ -123,9 +120,8 @@ function BindingField({
         integrations.find((item) => item.id === integrationId)?.type ===
           "online-backgrounds" && (
           <small>
-            Curated online albums refresh periodically. Image credits are always
-            displayed. Collections are supplied by third parties and are not
-            guaranteed family-safe.
+            Third-party collections may include unsuitable content. Image
+            credits are required.
           </small>
         )}
       {integrationId && (
@@ -143,7 +139,7 @@ function BindingField({
           }
         />
       )}
-      {loading && <small role="status">Finding sources…</small>}
+      {loading && <small role="status">Loading sources…</small>}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -203,11 +199,16 @@ function CalendarBindingField({
     <section className="calendar-bindings">
       <h3>{input.label}</h3>
       <p className="fine-print">
-        Merge up to eight calendars. Busy-only is the default. Enabling titles
-        publishes them to anyone who can reach this display URL—even if the face
-        hides them. Descriptions, locations, attendees, and links are never
-        shared.
+        Busy-only by default. Published titles are readable by anyone who can
+        reach this display URL, even when hidden by the face.
       </p>
+      <details className="help">
+        <summary>Calendar details</summary>
+        <p>
+          Combine up to eight calendars. Descriptions, locations, attendees, and
+          links are never shared.
+        </p>
+      </details>
       {sources.map((source, index) => (
         <div
           className="binding-field"
@@ -248,7 +249,7 @@ function CalendarBindingField({
       {sources.length < 8 && (
         <BindingField
           key={generation}
-          input={{ ...input, label: "Add calendar" }}
+          input={{ ...input, label: "Add calendar", description: undefined }}
           integrations={integrations}
           onChange={(source) => {
             if (
@@ -284,21 +285,15 @@ export function BindingFields({
   return (
     <section className="binding-fields">
       <div className="form-divider" />
-      <span className="eyebrow">DATA SOURCES</span>
+      <h3 className="form-section-title">Data sources</h3>
       <p className="fine-print">
-        Choose only the data you want to share. Anyone who can access this
-        display can read these values.
+        Selected data is readable by anyone who can reach this display URL.
         {face.inputs.some((input) => input.type === "image") &&
-          " Photo sources share the whole selected folder or album, not just the currently visible image."}
+          " Photo sources share the entire selected folder or album, not just the visible image."}
       </p>
       {!integrations.some((integration) =>
         face.inputs.some((input) => supportsInput(input, integration)),
-      ) && (
-        <p>
-          Add a connection on the Integrations page, then return here to choose
-          a source.
-        </p>
-      )}
+      ) && <p>Add a compatible connection on the Integrations page.</p>}
       {face.inputs.map((input) => {
         const binding = bindings[input.key];
         const update = (binding?: Bindings[string]) => {

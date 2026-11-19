@@ -11,7 +11,7 @@ test("select mounted photos, preview privately, and display and rotate inside th
   await page
     .getByLabel("Administrator password")
     .fill("a-long-browser-test-password");
-  await page.getByRole("button", { name: /Create your space|Sign in/ }).click();
+  await page.getByRole("button", { name: /Create password|Sign in/ }).click();
   await page.getByRole("button", { name: /^Integrations/ }).click();
   await page
     .getByRole("button", { name: "Add integration", exact: true })
@@ -33,7 +33,7 @@ test("select mounted photos, preview privately, and display and rotate inside th
   await page.getByRole("button", { name: /^Displays/ }).click();
   await page.getByRole("button", { name: "Add display", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill(name);
-  await page.getByRole("combobox", { name: "Start with a face" }).click();
+  await page.getByRole("combobox", { name: "Face", exact: true }).click();
   await page.getByRole("option", { name: "Photo Hours", exact: true }).click();
   await page
     .getByRole("button", { name: "Create display", exact: true })

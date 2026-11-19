@@ -3,7 +3,7 @@
   "id": "builtin-gradient",
   "version": "1.0.0",
   "name": "Color Drift",
-  "description": "A numberless clock floating over a slowly shifting gradient. Just four rounded marks and a little color in motion.",
+  "description": "Numberless analog clock with an animated pastel gradient.",
   "author": "screensvr",
   "entry": "index.html",
   "settings": [

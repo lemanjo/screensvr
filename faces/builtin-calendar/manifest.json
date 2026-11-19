@@ -3,7 +3,7 @@
   "id": "builtin-calendar",
   "version": "1.0.0",
   "name": "Calendar Hours",
-  "description": "A quiet clock and the next appointment from your selected calendars. Busy-only by default; no agenda, reminders, or distractions.",
+  "description": "Clock and next appointment, with event titles hidden by default.",
   "author": "screensvr",
   "entry": "index.html",
   "inputs": [
@@ -11,7 +11,7 @@
       "key": "calendar",
       "label": "Next appointment",
       "type": "calendar",
-      "description": "The next appointment across explicitly selected calendars. Ongoing timed events stay until they end."
+      "description": "Next or ongoing appointment from selected calendars."
     }
   ],
   "settings": [

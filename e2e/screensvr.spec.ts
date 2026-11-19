@@ -13,13 +13,13 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
   await page
     .getByLabel("Administrator password")
     .fill("a-long-browser-test-password");
-  await page.getByRole("button", { name: /Create your space|Sign in/ }).click();
+  await page.getByRole("button", { name: /Create password|Sign in/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Make room for a little calm." }),
+    page.getByRole("heading", { name: "Displays", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Add display", exact: true }).click();
   await page.getByLabel("Display name", { exact: true }).fill(displayName);
-  await page.getByRole("combobox", { name: "Start with a face" }).click();
+  await page.getByRole("combobox", { name: "Face", exact: true }).click();
   await page.getByRole("option", { name: "Slow Hours", exact: true }).click();
   await page
     .getByRole("button", { name: "Create display", exact: true })
@@ -67,7 +67,7 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
     await page
       .getByRole("button", { name: `Configure ${displayName}`, exact: true })
       .click();
-    await page.getByLabel("A small reminder").fill("Take a breath.");
+    await page.getByLabel("Caption", { exact: true }).fill("Take a breath.");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(digital.locator("#caption")).toHaveText("Take a breath.");
 
@@ -75,7 +75,9 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
     await page
       .getByRole("button", { name: `Configure ${displayName}`, exact: true })
       .click();
-    await page.getByLabel("A small reminder").fill("A moment, just for you.");
+    await page
+      .getByLabel("Caption", { exact: true })
+      .fill("A moment, just for you.");
     await page.getByRole("button", { name: "Save changes" }).click();
     await displayContext.setOffline(false);
     await expect(digital.locator("#caption")).toHaveText(
@@ -98,17 +100,24 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
         mimeType: "application/zip",
         buffer: faceZip(),
       });
-      await page.getByLabel("I trust the source of this package.").check();
-      await page
-        .getByRole("button", { name: "Install face", exact: true })
-        .click();
+      const install = page.getByRole("dialog", { name: "Install face" });
+      const confirm = install.getByRole("button", {
+        name: "Install face",
+        exact: true,
+      });
+      await expect(confirm).toBeDisabled();
+      await expect(
+        install.getByText(/sandboxing does not make untrusted code safe/),
+      ).toBeVisible();
+      await install.getByLabel("I trust the source of this package.").check();
+      await confirm.click();
       await expect(existing).toBeVisible();
     }
     await page.getByRole("button", { name: /^Displays/ }).click();
     await page
       .getByRole("button", { name: `Configure ${displayName}`, exact: true })
       .click();
-    await page.getByRole("combobox", { name: "Screen face" }).click();
+    await page.getByRole("combobox", { name: "Face", exact: true }).click();
     await page.getByRole("option", { name: "Test Face", exact: true }).click();
     await page
       .getByLabel("Caption", { exact: true })
@@ -171,7 +180,7 @@ test("manage a live display, reconnect, and install a framework-independent ZIP 
       .getByRole("button", { name: `Remove ${renamed}`, exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Yes, remove", exact: true })
+      .getByRole("button", { name: "Remove display", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: `Configure ${renamed}`, exact: true }),
